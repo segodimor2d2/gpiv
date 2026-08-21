@@ -15,6 +15,105 @@ typedef struct {
     const char *filename;
 } PlayerApp;
 
+/* ============================================================
+ * TECLADO
+ * -------------------------------------------------------- */
+/* ============================================================
+ * MPV - enviar comando
+ * ============================================================ */
+
+static int mpv_send_command(
+    PlayerApp *pa,
+    const char *cmd,
+    const char *arg)
+{
+    if (!pa->mpv) {
+        fprintf(stderr,
+                "[MPV-CMD] ERRO: mpv não está disponível\n");
+        return -1;
+    }
+
+    const char *command[] = {
+        cmd,
+        arg,
+        NULL
+    };
+
+    fprintf(stderr,
+            "[MPV-CMD] %s %s\n",
+            cmd,
+            arg ? arg : "");
+
+    int status = mpv_command(
+        pa->mpv,
+        command
+    );
+
+    if (status < 0) {
+        fprintf(stderr,
+                "[MPV-CMD] ERRO: %s\n",
+                mpv_error_string(status));
+    } else {
+        fprintf(stderr,
+                "[MPV-CMD] OK\n");
+    }
+
+    return status;
+}
+
+
+/* ============================================================
+ * MPV - pause/play
+ * ============================================================ */
+
+static void mpv_toggle_pause(PlayerApp *pa)
+{
+    fprintf(stderr,
+            "[MPV] PAUSE/PLAY\n");
+
+    mpv_send_command(
+        pa,
+        "cycle",
+        "pause"
+    );
+}
+
+
+static gboolean on_key_pressed(
+    GtkEventControllerKey *controller,
+    guint keyval,
+    guint keycode,
+    GdkModifierType state,
+    PlayerApp *pa)
+{
+    (void)controller;
+    (void)keycode;
+    (void)state;
+
+    fprintf(stderr,
+            "[KEY] keyval=0x%x\n",
+            keyval);
+
+    // if (keyval == GDK_KEY_space) {
+    //
+    //     fprintf(stderr,
+    //             "[KEY] SPACE\n");
+    //
+    //     mpv_toggle_pause(pa);
+    //
+    //     return TRUE;
+    // }
+
+    if (keyval == GDK_KEY_space) {
+
+        fprintf(stderr,
+                "[KEY] SPACE DETECTADO!\n");
+
+        return TRUE;
+    }
+
+    return FALSE;
+}
 
 /* ============================================================
  * mpv → preciso redesenhar transformamos isso em gtk_gl_area_queue_render()
@@ -498,6 +597,23 @@ static void on_window_map(
             gtk_widget_get_height(pa->gl_area));
 }
 
+
+static gboolean grab_gl_focus(gpointer data)
+{
+    PlayerApp *pa = data;
+
+    fprintf(stderr,
+            "[gtk] tentando colocar foco no GtkGLArea\n");
+
+    gtk_widget_grab_focus(pa->gl_area);
+
+    fprintf(stderr,
+            "[gtk] foco GtkGLArea = %d\n",
+            gtk_widget_has_focus(pa->gl_area));
+
+    return G_SOURCE_REMOVE;
+}
+
 /* ============================================================
  * ACTIVATE
  * ============================================================ */
@@ -528,7 +644,6 @@ static void on_activate(
         540
     );
 
-
     /* --------------------------------------------------------
      * GtkGLArea
      * -------------------------------------------------------- */
@@ -536,12 +651,14 @@ static void on_activate(
     pa->gl_area =
         gtk_gl_area_new();
 
+/* --------------------------------------------------------
+     * CONFIGURAÇÃO DO GtkGLArea
+     * -------------------------------------------------------- */
 
     gtk_gl_area_set_allowed_apis(
         GTK_GL_AREA(pa->gl_area),
         GDK_GL_API_GL
     );
-
 
     gtk_gl_area_set_required_version(
         GTK_GL_AREA(pa->gl_area),
@@ -564,15 +681,54 @@ static void on_activate(
         TRUE
     );
 
-
-    /*
+    /* --------------------------------------------------------
+     * COLOCA GtkGLArea NA JANELA
      * Coloca GtkGLArea dentro da janela.
-     */
+     * -------------------------------------------------------- */
 
     gtk_window_set_child(
         GTK_WINDOW(pa->window),
         pa->gl_area
     );
+
+    /* --------------------------------------------------------
+     * TECLADO
+     * -------------------------------------------------------- */
+
+    gtk_widget_set_focusable(
+        pa->gl_area,
+        TRUE
+    );
+
+    GtkEventControllerKey *key_controller =
+        GTK_EVENT_CONTROLLER_KEY(
+            gtk_event_controller_key_new()
+        );
+
+    gtk_event_controller_set_propagation_phase(
+        GTK_EVENT_CONTROLLER(key_controller),
+        GTK_PHASE_CAPTURE
+    );
+
+    g_signal_connect(
+        key_controller,
+        "key-pressed",
+        G_CALLBACK(on_key_pressed),
+        pa
+    );
+
+    /*
+     * O controlador fica na GtkWindow.
+     * Como está em CAPTURE, ele deve observar
+     * os eventos antes de chegarem ao widget focado.
+     */
+    gtk_widget_add_controller(
+        pa->window,
+        GTK_EVENT_CONTROLLER(key_controller)
+    );
+
+    fprintf(stderr,
+            "[gtk] controlador de teclado instalado na WINDOW\n");
 
 
     /* --------------------------------------------------------
@@ -647,16 +803,14 @@ static void on_activate(
         GTK_WINDOW(pa->window)
     );
 
-    /* --------------------------------------------------------
-     * PRIMEIRO RENDER EXPLÍCITO
-     * -------------------------------------------------------- */
+    fprintf(stderr,
+            "[gtk] janela apresentada\n");
 
-    // fprintf(stderr,
-    //         "[gtk] chamando gtk_gl_area_queue_render()\n");
+    g_idle_add(
+        grab_gl_focus,
+        pa
+    );
 
-    // gtk_gl_area_queue_render(
-    //     GTK_GL_AREA(pa->gl_area)
-    // );
 }
 
 
