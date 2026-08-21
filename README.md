@@ -1,4 +1,14 @@
-### Portanto, neste ponto eu classificaria o estado assim
+# GROUPED IMAGEM AND VIDEO (gpiv)
+
+```bash
+make clean
+make
+./gpiv tst1.mp4
+```
+
+---
+
+## estado assim
 
 | Componente                    | Estado |
 | ----------------------------- | ------ |
@@ -20,4 +30,4 @@
 | `mpv_render_context_render()` | ✅      |
 | FBO 0                         | ✅      |
 | vídeo na tela                 | **✅**  |
-| reprodução até o fim          | **✅**  | GROUPED IMAGEM AND VIDEO (gpiv)
+| reprodução até o fim          | **✅**  |
