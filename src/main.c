@@ -656,7 +656,7 @@ static gboolean on_gl_render(
      * Framebuffer atualmente usado pelo GtkGLArea.
      */
     mpv_opengl_fbo fbo = {
-        .fbo = 0,
+        .fbo = current_fbo,
         .w = width,
         .h = height,
         .internal_format = 0
