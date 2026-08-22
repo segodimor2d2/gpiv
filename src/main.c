@@ -11,6 +11,7 @@ typedef struct {
     GtkApplication *app;
     GtkWidget *window;
     GtkWidget *gl_area;
+    GtkWidget *info_label;
     mpv_handle *mpv;
     mpv_render_context *mpv_render;
     const char *filename;
@@ -18,6 +19,29 @@ typedef struct {
 } PlayerApp;
 
 
+static void setup_info_label_css(void)
+{
+    GtkCssProvider *provider =
+        gtk_css_provider_new();
+
+    gtk_css_provider_load_from_string(
+        provider,
+        ".video-info {"
+        "  font-size: 12px;"
+        "  color: white;"
+        "  background-color: rgba(0, 0, 0, 0.3);"
+        "  padding: 5px 8px;"
+        "}"
+    );
+
+    gtk_style_context_add_provider_for_display(
+        gdk_display_get_default(),
+        GTK_STYLE_PROVIDER(provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION
+    );
+
+    g_object_unref(provider);
+}
 
 static void mpv_check_events(PlayerApp *pa)
 {
@@ -1056,13 +1080,74 @@ static void on_activate(
     );
 
     /* --------------------------------------------------------
-     * COLOCA GtkGLArea NA JANELA
-     * Coloca GtkGLArea dentro da janela.
+     * OVERLAY
+     * -------------------------------------------------------- */
+
+    GtkWidget *overlay = gtk_overlay_new();
+
+    /*
+     * GtkGLArea fica como conteúdo principal.
+     */
+    gtk_overlay_set_child(
+        GTK_OVERLAY(overlay),
+        pa->gl_area
+    );
+
+
+    setup_info_label_css();
+
+    /* --------------------------------------------------------
+     * LABEL DE INFORMAÇÕES
+     * -------------------------------------------------------- */
+
+    pa->info_label = gtk_label_new(NULL);
+
+    gtk_widget_add_css_class(
+        pa->info_label,
+        "video-info"
+    );
+
+    gtk_label_set_text(
+        GTK_LABEL(pa->info_label),
+        pa->filename
+    );
+
+    gtk_widget_set_halign(
+        pa->info_label,
+        GTK_ALIGN_END
+    );
+
+    gtk_widget_set_valign(
+        pa->info_label,
+        GTK_ALIGN_END
+    );
+
+    gtk_widget_set_margin_end(
+        pa->info_label,
+        15
+    );
+
+    gtk_widget_set_margin_bottom(
+        pa->info_label,
+        15
+    );
+
+    /*
+     * Coloca o label sobre o vídeo.
+     */
+    gtk_overlay_add_overlay(
+        GTK_OVERLAY(overlay),
+        pa->info_label
+    );
+
+
+    /* --------------------------------------------------------
+     * COLOCA O OVERLAY NA JANELA
      * -------------------------------------------------------- */
 
     gtk_window_set_child(
         GTK_WINDOW(pa->window),
-        pa->gl_area
+        overlay
     );
 
     /* --------------------------------------------------------
