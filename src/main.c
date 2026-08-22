@@ -18,6 +18,65 @@ typedef struct {
     guint mpv_event_source;
 } PlayerApp;
 
+/* Protótipos */
+static gboolean restore_info_label(gpointer data);
+
+/* ============================================================
+* CLIPBOARD
+* ============================================================ */
+
+static void show_clipboard_message(PlayerApp *pa)
+{
+    if (!pa->info_label || !pa->filename)
+        return;
+
+    char message[8192];
+
+    snprintf(
+        message,
+        sizeof(message),
+        "%s\nPath copiado",
+        pa->filename
+    );
+
+    gtk_label_set_text(
+        GTK_LABEL(pa->info_label),
+        message
+    );
+}
+
+static void copy_video_path(PlayerApp *pa)
+{
+    if (!pa->filename || !pa->window)
+        return;
+
+    GdkDisplay *display =
+        gtk_widget_get_display(pa->window);
+
+    GdkClipboard *clipboard =
+        gdk_display_get_clipboard(display);
+
+    gdk_clipboard_set_text(
+        clipboard,
+        pa->filename
+    );
+
+    fprintf(stderr,
+            "[CLIPBOARD] copiado: %s\n",
+            pa->filename);
+
+    show_clipboard_message(pa);
+
+    g_timeout_add(
+        2000,
+        restore_info_label,
+        pa
+    );
+}
+
+/* ============================================================
+* CSS
+* ============================================================ */
 
 static void setup_info_label_css(void)
 {
@@ -42,6 +101,28 @@ static void setup_info_label_css(void)
 
     g_object_unref(provider);
 }
+
+
+/* ============================================================
+ * RESTORE_INFO_LABEL
+ * ============================================================ */
+
+static gboolean restore_info_label(gpointer data)
+{
+    PlayerApp *pa = data;
+
+    if (!pa->info_label || !pa->filename)
+        return G_SOURCE_REMOVE;
+
+    gtk_label_set_text(
+        GTK_LABEL(pa->info_label),
+        pa->filename
+    );
+
+    return G_SOURCE_REMOVE;
+}
+
+
 
 static void mpv_check_events(PlayerApp *pa)
 {
@@ -168,23 +249,8 @@ static int mpv_send_command(
 
 
 /* ============================================================
- * save frame
- * ============================================================ */
-
-static gboolean restore_info_label(gpointer data)
-{
-    PlayerApp *pa = data;
-
-    if (!pa->info_label || !pa->filename)
-        return G_SOURCE_REMOVE;
-
-    gtk_label_set_text(
-        GTK_LABEL(pa->info_label),
-        pa->filename
-    );
-
-    return G_SOURCE_REMOVE;
-}
+* SAVE FRAME
+* ============================================================ */
 
 static void show_saved_message(PlayerApp *pa)
 {
@@ -469,6 +535,24 @@ static gboolean on_key_pressed(
     }
 
 
+    /* --------------------------------------------------------
+     * Y -> copiar path do vídeo
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_y ||
+        keyval == GDK_KEY_Y) {
+
+        fprintf(stderr,
+                "[KEY] Y -> copiar path\n");
+
+        copy_video_path(pa);
+
+        return TRUE;
+    }
+
+    /* --------------------------------------------------------
+     * fim
+     * -------------------------------------------------------- */
     return FALSE;
 }
 
