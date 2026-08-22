@@ -13,6 +13,7 @@ typedef struct {
     mpv_handle *mpv;
     mpv_render_context *mpv_render;
     const char *filename;
+    guint mpv_event_source;
 } PlayerApp;
 
 
@@ -57,10 +58,10 @@ static void mpv_check_events(PlayerApp *pa)
             mpv_event_end_file *end =
                 event->data;
 
-            fprintf(stderr,
-                    "[MPV-EVENT] END_FILE reason=%d error=%s\n",
-                    end ? end->reason : -1,
-                    end ? mpv_error_string(end->error) : "NULL");
+        fprintf(stderr,
+                "[MPV-EVENT] END_FILE reason=%d error=%s\n",
+                end ? (int)end->reason : -1,
+                end ? mpv_error_string(end->error) : "NULL");
             break;
         }
 
@@ -87,6 +88,9 @@ static void mpv_check_events(PlayerApp *pa)
 static gboolean mpv_event_timer(gpointer data)
 {
     PlayerApp *pa = data;
+
+    if (!pa->mpv)
+        return G_SOURCE_REMOVE;
 
     mpv_check_events(pa);
 
@@ -172,17 +176,9 @@ static gboolean on_key_pressed(
     if (keyval == GDK_KEY_space) {
 
         fprintf(stderr,
-                "[KEY] SPACE\n");
+                "[KEY] SPACE DETECTADO!\n");
 
         mpv_toggle_pause(pa);
-
-        return TRUE;
-    }
-
-    if (keyval == GDK_KEY_space) {
-
-        fprintf(stderr,
-                "[KEY] SPACE DETECTADO!\n");
 
         return TRUE;
     }
@@ -332,8 +328,17 @@ static void on_gl_realize(GtkGLArea *area, PlayerApp *pa)
     fprintf(stderr,
             "[MPV] mpv_create() OK\n");
 
-    mpv_set_option_string(pa->mpv, "terminal", "yes");
-    mpv_set_option_string(pa->mpv, "msg-level", "all=warn");
+    mpv_set_option_string(
+        pa->mpv,
+        "terminal",
+        "yes"
+    );
+
+    mpv_set_option_string(
+        pa->mpv,
+        "msg-level",
+        "all=warn"
+    );
 
     /* --------------------------------------------------------
      * MPV sem janela própria
@@ -361,13 +366,33 @@ static void on_gl_realize(GtkGLArea *area, PlayerApp *pa)
 
 
     /* --------------------------------------------------------
+     * LOOP DO ARQUIVO
+     * -------------------------------------------------------- */
+
+    status = mpv_set_option_string(
+        pa->mpv,
+        "loop-file",
+        "yes"
+    );
+
+    if (status < 0) {
+        fprintf(stderr,
+                "[MPV] ERRO: loop-file=yes: %s\n",
+                mpv_error_string(status));
+    } else {
+        fprintf(stderr,
+                "[MPV] loop-file=yes configurado\n");
+    }
+
+
+    /* --------------------------------------------------------
      * Decodificação por hardware
      * -------------------------------------------------------- */
 
     status = mpv_set_option_string(
         pa->mpv,
         "hwdec",
-        "no"
+        "auto"
     );
 
     if (status < 0) {
@@ -382,7 +407,7 @@ static void on_gl_realize(GtkGLArea *area, PlayerApp *pa)
     }
 
     fprintf(stderr,
-            "[MPV] hwdec=no configurado\n");
+            "[MPV] hwdec=auto configurado\n");
 
 
     /* --------------------------------------------------------
@@ -520,28 +545,38 @@ static void on_gl_unrealize(
      * O render context deve ser destruído antes
      * do mpv_handle.
      */
+
+    if (pa->mpv_event_source) {
+
+        g_source_remove(
+            pa->mpv_event_source
+        );
+
+        pa->mpv_event_source = 0;
+    }
+
     if (pa->mpv_render) {
+
         fprintf(stderr,
                 "[MPV-RENDER] destruindo render context\n");
 
-        mpv_render_context_free(pa->mpv_render);
+        mpv_render_context_free(
+            pa->mpv_render
+        );
 
         pa->mpv_render = NULL;
-
-        fprintf(stderr,
-                "[MPV-RENDER] render context destruído\n");
     }
 
     if (pa->mpv) {
+
         fprintf(stderr,
                 "[MPV] destruindo mpv\n");
 
-        mpv_terminate_destroy(pa->mpv);
+        mpv_terminate_destroy(
+            pa->mpv
+        );
 
         pa->mpv = NULL;
-
-        fprintf(stderr,
-                "[MPV] mpv destruído\n");
     }
 
     (void)area;
@@ -970,11 +1005,12 @@ static void on_activate(
         GTK_WINDOW(pa->window)
     );
 
-    g_timeout_add(
-        10,
-        mpv_event_timer,
-        pa
-    );
+    pa->mpv_event_source =
+        g_timeout_add(
+            10,
+            mpv_event_timer,
+            pa
+        );
 
     fprintf(stderr,
             "[gtk] janela apresentada\n");
