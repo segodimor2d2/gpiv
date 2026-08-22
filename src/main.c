@@ -171,6 +171,74 @@ static int mpv_send_command(
  * save frame
  * ============================================================ */
 
+static gboolean restore_info_label(gpointer data)
+{
+    PlayerApp *pa = data;
+
+    if (!pa->info_label || !pa->filename)
+        return G_SOURCE_REMOVE;
+
+    gtk_label_set_text(
+        GTK_LABEL(pa->info_label),
+        pa->filename
+    );
+
+    return G_SOURCE_REMOVE;
+}
+
+static void show_saved_message(PlayerApp *pa)
+{
+    if (!pa->info_label || !pa->filename)
+        return;
+
+    char path[4096];
+
+    snprintf(
+        path,
+        sizeof(path),
+        "%s",
+        pa->filename
+    );
+
+    char *filename = basename(path);
+
+    /*
+     * Remove a extensão.
+     *
+     * tst2.mp4 -> tst2
+     */
+
+    char name[4096];
+
+    snprintf(
+        name,
+        sizeof(name),
+        "%s",
+        filename
+    );
+
+    char *dot = strrchr(name, '.');
+
+    if (dot)
+        *dot = '\0';
+
+    char message[8192];
+
+    snprintf(
+        message,
+        sizeof(message),
+        "%s\nFrame %.*s salvo",
+        pa->filename,
+        (int)(sizeof(message) - strlen(pa->filename) - 20),
+        name
+    );
+
+    gtk_label_set_text(
+        GTK_LABEL(pa->info_label),
+        message
+    );
+}
+
 static void mpv_save_frame(PlayerApp *pa)
 {
     if (!pa->mpv || !pa->filename)
@@ -202,9 +270,11 @@ static void mpv_save_frame(PlayerApp *pa)
     );
 
     if (status < 0) {
+
         fprintf(stderr,
                 "[SCREENSHOT] ERRO screenshot-dir: %s\n",
                 mpv_error_string(status));
+
         return;
     }
 
@@ -212,12 +282,7 @@ static void mpv_save_frame(PlayerApp *pa)
      * Nome do arquivo:
      *
      * %F = nome do arquivo de vídeo
-     * %n = número sequencial do screenshot
-     *
-     * Exemplo:
-     *
-     * tst1-0001.jpg
-     * tst1-0002.jpg
+     * %n = número sequencial
      */
 
     status = mpv_set_option_string(
@@ -227,9 +292,11 @@ static void mpv_save_frame(PlayerApp *pa)
     );
 
     if (status < 0) {
+
         fprintf(stderr,
                 "[SCREENSHOT] ERRO screenshot-template: %s\n",
                 mpv_error_string(status));
+
         return;
     }
 
@@ -252,14 +319,37 @@ static void mpv_save_frame(PlayerApp *pa)
     );
 
     if (status < 0) {
+
         fprintf(stderr,
                 "[SCREENSHOT] ERRO: %s\n",
                 mpv_error_string(status));
+
     } else {
+
         fprintf(stderr,
                 "[SCREENSHOT] OK\n");
+
+        /*
+         * Só mostra "Frame tst2 salvo"
+         * depois que o comando screenshot
+         * foi aceito pelo mpv.
+         */
+
+        show_saved_message(pa);
+
+        /*
+         * Depois de 2 segundos volta
+         * a mostrar o caminho do vídeo.
+         */
+
+        g_timeout_add(
+            2000,
+            restore_info_label,
+            pa
+        );
     }
 }
+
 
 /* ============================================================
  * MPV - pause/play
