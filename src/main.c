@@ -5,6 +5,7 @@
 #include <locale.h>
 #include <mpv/client.h>
 #include <mpv/render_gl.h>
+#include <libgen.h>
 
 typedef struct {
     GtkApplication *app;
@@ -143,6 +144,100 @@ static int mpv_send_command(
 
 
 /* ============================================================
+ * save frame
+ * ============================================================ */
+
+static void mpv_save_frame(PlayerApp *pa)
+{
+    if (!pa->mpv || !pa->filename)
+        return;
+
+    char path[4096];
+
+    snprintf(
+        path,
+        sizeof(path),
+        "%s",
+        pa->filename
+    );
+
+    char *dir = dirname(path);
+
+    fprintf(stderr,
+            "[SCREENSHOT] diretório = %s\n",
+            dir);
+
+    /*
+     * Define onde o screenshot será salvo.
+     */
+
+    int status = mpv_set_option_string(
+        pa->mpv,
+        "screenshot-dir",
+        dir
+    );
+
+    if (status < 0) {
+        fprintf(stderr,
+                "[SCREENSHOT] ERRO screenshot-dir: %s\n",
+                mpv_error_string(status));
+        return;
+    }
+
+    /*
+     * Nome do arquivo:
+     *
+     * %F = nome do arquivo de vídeo
+     * %n = número sequencial do screenshot
+     *
+     * Exemplo:
+     *
+     * tst1-0001.jpg
+     * tst1-0002.jpg
+     */
+
+    status = mpv_set_option_string(
+        pa->mpv,
+        "screenshot-template",
+        "%F_%n"
+    );
+
+    if (status < 0) {
+        fprintf(stderr,
+                "[SCREENSHOT] ERRO screenshot-template: %s\n",
+                mpv_error_string(status));
+        return;
+    }
+
+    /*
+     * Captura o frame atual.
+     */
+
+    const char *command[] = {
+        "screenshot",
+        "video",
+        NULL
+    };
+
+    fprintf(stderr,
+            "[SCREENSHOT] salvando frame\n");
+
+    status = mpv_command(
+        pa->mpv,
+        command
+    );
+
+    if (status < 0) {
+        fprintf(stderr,
+                "[SCREENSHOT] ERRO: %s\n",
+                mpv_error_string(status));
+    } else {
+        fprintf(stderr,
+                "[SCREENSHOT] OK\n");
+    }
+}
+
+/* ============================================================
  * MPV - pause/play
  * ============================================================ */
 
@@ -243,6 +338,22 @@ static gboolean on_key_pressed(
 
         return TRUE;
     }
+
+    /* --------------------------------------------------------
+     * s -> salvar frame
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_s ||
+        keyval == GDK_KEY_S) {
+
+        fprintf(stderr,
+                "[KEY] S -> salvar frame\n");
+
+        mpv_save_frame(pa);
+
+        return TRUE;
+    }
+
 
     return FALSE;
 }
