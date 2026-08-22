@@ -15,9 +15,84 @@ typedef struct {
     const char *filename;
 } PlayerApp;
 
-/* ============================================================
- * TECLADO
- * -------------------------------------------------------- */
+
+
+static void mpv_check_events(PlayerApp *pa)
+{
+    if (!pa->mpv)
+        return;
+
+    while (1) {
+        mpv_event *event = mpv_wait_event(pa->mpv, 0);
+
+        if (!event)
+            break;
+
+        if (event->event_id == MPV_EVENT_NONE)
+            break;
+
+        fprintf(stderr,
+                "[MPV-EVENT] id=%d name=%s\n",
+                event->event_id,
+                mpv_event_name(event->event_id));
+
+        switch (event->event_id) {
+
+        case MPV_EVENT_FILE_LOADED:
+            fprintf(stderr,
+                    "[MPV-EVENT] FILE_LOADED\n");
+            break;
+
+        case MPV_EVENT_VIDEO_RECONFIG:
+            fprintf(stderr,
+                    "[MPV-EVENT] VIDEO_RECONFIG\n");
+            break;
+
+        case MPV_EVENT_PLAYBACK_RESTART:
+            fprintf(stderr,
+                    "[MPV-EVENT] PLAYBACK_RESTART\n");
+            break;
+
+        case MPV_EVENT_END_FILE: {
+            mpv_event_end_file *end =
+                event->data;
+
+            fprintf(stderr,
+                    "[MPV-EVENT] END_FILE reason=%d error=%s\n",
+                    end ? end->reason : -1,
+                    end ? mpv_error_string(end->error) : "NULL");
+            break;
+        }
+
+        case MPV_EVENT_LOG_MESSAGE: {
+            mpv_event_log_message *msg =
+                event->data;
+
+            if (msg) {
+                fprintf(stderr,
+                        "[MPV-LOG] [%s] %s",
+                        msg->prefix,
+                        msg->text);
+            }
+            break;
+        }
+
+        default:
+            break;
+        }
+    }
+}
+
+
+static gboolean mpv_event_timer(gpointer data)
+{
+    PlayerApp *pa = data;
+
+    mpv_check_events(pa);
+
+    return G_SOURCE_CONTINUE;
+}
+
 /* ============================================================
  * MPV - enviar comando
  * ============================================================ */
@@ -131,6 +206,21 @@ static void on_mpv_update(void *ctx)
     );
 }
 
+
+static gboolean force_render(gpointer data)
+{
+    PlayerApp *pa = data;
+
+    if (pa->gl_area) {
+        gtk_gl_area_queue_render(
+            GTK_GL_AREA(pa->gl_area)
+        );
+    }
+
+    return G_SOURCE_CONTINUE;
+}
+
+
 /* ============================================================
  * MPV -> resolução de funções OpenGL
  * ============================================================ */
@@ -218,6 +308,7 @@ static void on_gl_realize(GtkGLArea *area, PlayerApp *pa)
             "[MPV] LC_NUMERIC depois = %s\n",
             setlocale(LC_NUMERIC, NULL));
 
+
     fprintf(stderr,
             "[MPV] chamando mpv_create()\n");
 
@@ -232,13 +323,64 @@ static void on_gl_realize(GtkGLArea *area, PlayerApp *pa)
     fprintf(stderr,
             "[MPV] mpv_create() OK\n");
 
+    mpv_set_option_string(pa->mpv, "terminal", "yes");
+    mpv_set_option_string(pa->mpv, "msg-level", "all=v");
 
-    /*
-     * Neste teste ainda NÃO criamos
-     * mpv_render_context.
-     */
+    /* --------------------------------------------------------
+     * MPV sem janela própria
+     * -------------------------------------------------------- */
 
-    int status = mpv_initialize(pa->mpv);
+    int status = mpv_set_option_string(
+        pa->mpv,
+        "vo",
+        "libmpv"
+    );
+
+    if (status < 0) {
+        fprintf(stderr,
+                "[MPV] ERRO: vo=libmpv: %s\n",
+                mpv_error_string(status));
+
+        mpv_terminate_destroy(pa->mpv);
+        pa->mpv = NULL;
+
+        return;
+    }
+
+    fprintf(stderr,
+            "[MPV] vo=libmpv configurado\n");
+
+
+    /* --------------------------------------------------------
+     * Primeiro teste: decodificação por software
+     * -------------------------------------------------------- */
+
+    status = mpv_set_option_string(
+        pa->mpv,
+        "hwdec",
+        "no"
+    );
+
+    if (status < 0) {
+        fprintf(stderr,
+                "[MPV] ERRO: hwdec=no: %s\n",
+                mpv_error_string(status));
+
+        mpv_terminate_destroy(pa->mpv);
+        pa->mpv = NULL;
+
+        return;
+    }
+
+    fprintf(stderr,
+            "[MPV] hwdec=no configurado\n");
+
+
+    /* --------------------------------------------------------
+     * INICIALIZA MPV
+     * -------------------------------------------------------- */
+
+    status = mpv_initialize(pa->mpv);
 
     if (status < 0) {
         fprintf(stderr,
@@ -254,10 +396,6 @@ static void on_gl_realize(GtkGLArea *area, PlayerApp *pa)
     fprintf(stderr,
             "[MPV] mpv_initialize() OK\n");
 
-
-
-
-
     /* ========================================================
      * MPV RENDER CONTEXT
      * ======================================================== */
@@ -265,27 +403,22 @@ static void on_gl_realize(GtkGLArea *area, PlayerApp *pa)
     fprintf(stderr,
             "[MPV-RENDER] criando mpv_render_context\n");
 
-    int advanced_control = 1;
-
     mpv_opengl_init_params gl_init = {
         .get_proc_address = mpv_get_proc_address,
         .get_proc_address_ctx = NULL
     };
-
 
     mpv_render_param params[] = {
         {
             MPV_RENDER_PARAM_API_TYPE,
             (void *)MPV_RENDER_API_TYPE_OPENGL
         },
+
         {
             MPV_RENDER_PARAM_OPENGL_INIT_PARAMS,
             &gl_init
         },
-        {
-            MPV_RENDER_PARAM_ADVANCED_CONTROL,
-            &advanced_control
-        },
+
         {
             MPV_RENDER_PARAM_INVALID,
             NULL
@@ -446,25 +579,16 @@ static gboolean on_gl_render(
             GTK_WIDGET(area));
 
     fprintf(stderr,
-            "[gtk-render] RENDER "
-            "mpv=%p render=%p\n",
+            "[GTK-RENDER] RENDER "
+            "mpv=%p render=%p size=%dx%d\n",
             (void *)pa->mpv,
-            (void *)pa->mpv_render);
-
-    fprintf(stderr,
-            "[gtk-render] viewport=%dx%d\n",
+            (void *)pa->mpv_render,
             width,
             height);
 
-
-    glViewport(
-        0,
-        0,
-        width,
-        height
-    );
-
-
+    /*
+     * O GtkGLArea ainda não tem um render context do mpv.
+     */
     if (!pa->mpv_render) {
 
         glClearColor(
@@ -479,22 +603,77 @@ static gboolean on_gl_render(
         return TRUE;
     }
 
+    /*
+     * Define o viewport OpenGL.
+     */
+
+    glViewport(
+        0,
+        0,
+        width,
+        height
+    );
+
+    GLint current_fbo = 0;
+
+    glGetIntegerv(
+        GL_DRAW_FRAMEBUFFER_BINDING,
+        &current_fbo
+    );
+
+    fprintf(stderr,
+            "[GL] DRAW_FRAMEBUFFER = %d\n",
+            current_fbo
+    );
+
+    GLenum fbo_status =
+        glCheckFramebufferStatus(
+            GL_DRAW_FRAMEBUFFER
+        );
+
+    fprintf(stderr,
+            "[GL] FBO status = 0x%x\n",
+            fbo_status);
+
+    /*
+     * TESTE:
+     * limpa a tela com vermelho.
+     *
+     * Se você enxergar vermelho,
+     * sabemos que o GtkGLArea/OpenGL
+     * está funcionando.
+     */
+    glClearColor(
+        1.0f,
+        0.0f,
+        0.0f,
+        1.0f
+    );
+
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    /*
+     * Framebuffer atualmente usado pelo GtkGLArea.
+     */
+    mpv_opengl_fbo fbo = {
+        .fbo = 0,
+        .w = width,
+        .h = height,
+        .internal_format = 0
+    };
+
+    int flip_y = 1;
 
     mpv_render_param params[] = {
 
         {
             MPV_RENDER_PARAM_OPENGL_FBO,
-            &(mpv_opengl_fbo){
-                .fbo = 0,
-                .w = width,
-                .h = height,
-                .internal_format = 0
-            }
+            &fbo
         },
 
         {
             MPV_RENDER_PARAM_FLIP_Y,
-            &(int){1}
+            &flip_y
         },
 
         {
@@ -503,30 +682,28 @@ static gboolean on_gl_render(
         }
     };
 
-
+    /*
+     * Manda o mpv desenhar o frame.
+     */
     int status =
         mpv_render_context_render(
             pa->mpv_render,
             params
         );
 
+    fprintf(stderr,
+            "[MPV-RENDER] status=%d\n",
+            status);
 
     if (status < 0) {
 
         fprintf(stderr,
-                "[MPV-RENDER] ERRO render: %s\n",
+                "[MPV-RENDER] ERRO: %s\n",
                 mpv_error_string(status));
-
-    } else {
-
-        fprintf(stderr,
-                "[MPV-RENDER] render OK\n");
     }
-
 
     return TRUE;
 }
-
 
 /* ============================================================
  * WINDOW REALIZE
@@ -803,11 +980,28 @@ static void on_activate(
         GTK_WINDOW(pa->window)
     );
 
+    g_timeout_add(
+        10,
+        mpv_event_timer,
+        pa
+    );
+
     fprintf(stderr,
             "[gtk] janela apresentada\n");
 
     g_idle_add(
         grab_gl_focus,
+        pa
+    );
+
+    /*
+     * TESTE:
+     * força o GtkGLArea a pedir renderização
+     * aproximadamente 60 vezes por segundo.
+     */
+    g_timeout_add(
+        16,
+        force_render,
         pa
     );
 
