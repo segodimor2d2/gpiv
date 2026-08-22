@@ -169,15 +169,15 @@ static gboolean on_key_pressed(
             "[KEY] keyval=0x%x\n",
             keyval);
 
-    // if (keyval == GDK_KEY_space) {
-    //
-    //     fprintf(stderr,
-    //             "[KEY] SPACE\n");
-    //
-    //     mpv_toggle_pause(pa);
-    //
-    //     return TRUE;
-    // }
+    if (keyval == GDK_KEY_space) {
+
+        fprintf(stderr,
+                "[KEY] SPACE\n");
+
+        mpv_toggle_pause(pa);
+
+        return TRUE;
+    }
 
     if (keyval == GDK_KEY_space) {
 
@@ -194,30 +194,39 @@ static gboolean on_key_pressed(
  * mpv → preciso redesenhar transformamos isso em gtk_gl_area_queue_render()
  * ============================================================ */
 
-static void on_mpv_update(void *ctx)
+static gboolean mpv_queue_render_idle(gpointer data)
 {
-    PlayerApp *pa = ctx;
+    PlayerApp *pa = data;
 
-    fprintf(stderr,
-            "[MPV] UPDATE -> queue_render()\n");
+    if (!pa->gl_area)
+        return G_SOURCE_REMOVE;
 
     gtk_gl_area_queue_render(
         GTK_GL_AREA(pa->gl_area)
     );
+
+    return G_SOURCE_REMOVE;
 }
 
 
-static gboolean force_render(gpointer data)
+static void on_mpv_update(void *ctx)
 {
-    PlayerApp *pa = data;
+    PlayerApp *pa = ctx;
 
-    if (pa->gl_area) {
-        gtk_gl_area_queue_render(
-            GTK_GL_AREA(pa->gl_area)
-        );
-    }
+    /*
+     * IMPORTANTE:
+     *
+     * Este callback pode ser chamado pela thread do mpv.
+     * Não chamamos GTK diretamente aqui.
+     *
+     * Apenas agendamos o queue_render() na main loop do GTK.
+     */
 
-    return G_SOURCE_CONTINUE;
+    g_main_context_invoke(
+        NULL,
+        mpv_queue_render_idle,
+        pa
+    );
 }
 
 
@@ -324,7 +333,7 @@ static void on_gl_realize(GtkGLArea *area, PlayerApp *pa)
             "[MPV] mpv_create() OK\n");
 
     mpv_set_option_string(pa->mpv, "terminal", "yes");
-    mpv_set_option_string(pa->mpv, "msg-level", "all=v");
+    mpv_set_option_string(pa->mpv, "msg-level", "all=warn");
 
     /* --------------------------------------------------------
      * MPV sem janela própria
@@ -352,7 +361,7 @@ static void on_gl_realize(GtkGLArea *area, PlayerApp *pa)
 
 
     /* --------------------------------------------------------
-     * Primeiro teste: decodificação por software
+     * Decodificação por hardware
      * -------------------------------------------------------- */
 
     status = mpv_set_option_string(
@@ -363,7 +372,7 @@ static void on_gl_realize(GtkGLArea *area, PlayerApp *pa)
 
     if (status < 0) {
         fprintf(stderr,
-                "[MPV] ERRO: hwdec=no: %s\n",
+                "[MPV] ERRO: hwdec=auto: %s\n",
                 mpv_error_string(status));
 
         mpv_terminate_destroy(pa->mpv);
@@ -578,16 +587,21 @@ static gboolean on_gl_render(
         gtk_widget_get_height(
             GTK_WIDGET(area));
 
-    fprintf(stderr,
-            "[GTK-RENDER] RENDER "
-            "mpv=%p render=%p size=%dx%d\n",
-            (void *)pa->mpv,
-            (void *)pa->mpv_render,
-            width,
-            height);
+    /*
+     * GtkGLArea pode receber um render enquanto
+     * ainda possui tamanho 0x0.
+     */
+    if (width <= 0 || height <= 0) {
+        fprintf(stderr,
+                "[GTK-RENDER] tamanho inválido: %dx%d\n",
+                width,
+                height);
+
+        return TRUE;
+    }
 
     /*
-     * O GtkGLArea ainda não tem um render context do mpv.
+     * Ainda não temos render context do mpv.
      */
     if (!pa->mpv_render) {
 
@@ -604,9 +618,8 @@ static gboolean on_gl_render(
     }
 
     /*
-     * Define o viewport OpenGL.
+     * Viewport do GtkGLArea.
      */
-
     glViewport(
         0,
         0,
@@ -614,6 +627,9 @@ static gboolean on_gl_render(
         height
     );
 
+    /*
+     * FBO atualmente fornecido pelo GtkGLArea.
+     */
     GLint current_fbo = 0;
 
     glGetIntegerv(
@@ -621,39 +637,8 @@ static gboolean on_gl_render(
         &current_fbo
     );
 
-    fprintf(stderr,
-            "[GL] DRAW_FRAMEBUFFER = %d\n",
-            current_fbo
-    );
-
-    GLenum fbo_status =
-        glCheckFramebufferStatus(
-            GL_DRAW_FRAMEBUFFER
-        );
-
-    fprintf(stderr,
-            "[GL] FBO status = 0x%x\n",
-            fbo_status);
-
     /*
-     * TESTE:
-     * limpa a tela com vermelho.
-     *
-     * Se você enxergar vermelho,
-     * sabemos que o GtkGLArea/OpenGL
-     * está funcionando.
-     */
-    glClearColor(
-        1.0f,
-        0.0f,
-        0.0f,
-        1.0f
-    );
-
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    /*
-     * Framebuffer atualmente usado pelo GtkGLArea.
+     * FBO usado pelo libmpv.
      */
     mpv_opengl_fbo fbo = {
         .fbo = current_fbo,
@@ -683,17 +668,13 @@ static gboolean on_gl_render(
     };
 
     /*
-     * Manda o mpv desenhar o frame.
+     * Renderiza o frame.
      */
     int status =
         mpv_render_context_render(
             pa->mpv_render,
             params
         );
-
-    fprintf(stderr,
-            "[MPV-RENDER] status=%d\n",
-            status);
 
     if (status < 0) {
 
@@ -702,9 +683,18 @@ static gboolean on_gl_render(
                 mpv_error_string(status));
     }
 
+    /*
+     * IMPORTANTE:
+     *
+     * Informa ao libmpv que o frame foi
+     * entregue ao ciclo de apresentação.
+     */
+    mpv_render_context_report_swap(
+        pa->mpv_render
+    );
+
     return TRUE;
 }
-
 /* ============================================================
  * WINDOW REALIZE
  * ============================================================ */
@@ -828,7 +818,7 @@ static void on_activate(
     pa->gl_area =
         gtk_gl_area_new();
 
-/* --------------------------------------------------------
+    /* --------------------------------------------------------
      * CONFIGURAÇÃO DO GtkGLArea
      * -------------------------------------------------------- */
 
@@ -966,7 +956,7 @@ static void on_activate(
 
     gtk_gl_area_set_auto_render(
         GTK_GL_AREA(pa->gl_area),
-        TRUE
+        FALSE
     );
 
     /* --------------------------------------------------------
@@ -991,17 +981,6 @@ static void on_activate(
 
     g_idle_add(
         grab_gl_focus,
-        pa
-    );
-
-    /*
-     * TESTE:
-     * força o GtkGLArea a pedir renderização
-     * aproximadamente 60 vezes por segundo.
-     */
-    g_timeout_add(
-        16,
-        force_render,
         pa
     );
 
