@@ -112,15 +112,16 @@ static int mpv_send_command(
         return -1;
     }
 
-    const char *command[] = {
-        cmd,
-        arg,
-        NULL
-    };
+    const char *command[3];
+
+    command[0] = cmd;
+    command[1] = arg;
+    command[2] = NULL;
 
     fprintf(stderr,
-            "[MPV-CMD] %s %s\n",
+            "[MPV-CMD] %s%s%s\n",
             cmd,
+            arg ? " " : "",
             arg ? arg : "");
 
     int status = mpv_command(
@@ -173,12 +174,72 @@ static gboolean on_key_pressed(
             "[KEY] keyval=0x%x\n",
             keyval);
 
+    /* --------------------------------------------------------
+     * Q -> sair do programa
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_q ||
+        keyval == GDK_KEY_Q) {
+
+        fprintf(stderr,
+                "[KEY] Q DETECTADO -> saindo\n");
+
+        gtk_window_destroy(
+            GTK_WINDOW(pa->window)
+        );
+
+        return TRUE;
+    }
+
+    /* --------------------------------------------------------
+     * SPACE -> pause/play
+     * -------------------------------------------------------- */
+
     if (keyval == GDK_KEY_space) {
 
         fprintf(stderr,
                 "[KEY] SPACE DETECTADO!\n");
 
         mpv_toggle_pause(pa);
+
+        return TRUE;
+    }
+
+
+    /* --------------------------------------------------------
+     * K -> frame anterior
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_k ||
+        keyval == GDK_KEY_K) {
+
+        fprintf(stderr,
+                "[KEY] K -> frame anterior\n");
+
+        mpv_send_command(
+            pa,
+            "frame-back-step",
+            NULL
+        );
+
+        return TRUE;
+    }
+
+    /* --------------------------------------------------------
+     * J -> próximo frame
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_j ||
+        keyval == GDK_KEY_J) {
+
+        fprintf(stderr,
+                "[KEY] J -> próximo frame\n");
+
+        mpv_send_command(
+            pa,
+            "frame-step",
+            NULL
+        );
 
         return TRUE;
     }
