@@ -1,9 +1,28 @@
 #ifndef APP_H
 #define APP_H
 
-typedef struct _PlayerApp PlayerApp;
+#include <gtk/gtk.h>
 
-PlayerApp *player_app_new(const char *filename);
+#include "player.h"
+
+typedef struct _PlayerApp {
+
+    GtkApplication *app;
+    GtkWidget *window;
+    GtkWidget *gl_area;
+    GtkWidget *info_label;
+
+    Player *player;
+
+    const char *filename;
+
+} PlayerApp;
+
+
+PlayerApp *player_app_new(
+    const char *filename
+);
+
 
 int player_app_run(
     PlayerApp *pa,
@@ -11,6 +30,9 @@ int player_app_run(
     char **argv
 );
 
-void player_app_free(PlayerApp *pa);
+
+void player_app_free(
+    PlayerApp *pa
+);
 
 #endif

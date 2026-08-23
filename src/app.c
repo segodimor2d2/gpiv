@@ -1,76 +1,74 @@
 #include "app.h"
+#include "player.h"
 
 #include <gtk/gtk.h>
 #include <epoxy/gl.h>
 #include <GL/glx.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <locale.h>
-#include <math.h>
+
 #include <mpv/client.h>
 #include <mpv/render_gl.h>
-#include <libgen.h>
-
-
-/* ============================================================
- * PLAYER APP
- * ============================================================ */
-
-struct _PlayerApp {
-
-    GtkApplication *app;
-    GtkWidget *window;
-    GtkWidget *gl_area;
-    GtkWidget *info_label;
-
-    mpv_handle *mpv;
-    mpv_render_context *mpv_render;
-
-    guint mpv_event_source;
-
-    const char *filename;
-
-    int video_rotation;
-    int brightness;
-
-    double video_zoom;
-    double video_pan_x;
-    double video_pan_y;
-
-    gboolean panning;
-
-    double pan_start_x;
-    double pan_start_y;
-
-    double pan_start_pan_x;
-    double pan_start_pan_y;
-
-    gboolean mouse_moved;
-    double mouse_press_x;
-    double mouse_press_y;
-};
 
 
 /* ============================================================
  * PROTÓTIPOS INTERNOS
  * ============================================================ */
 
-static gboolean restore_info_label(gpointer data);
-
 static void on_activate(
     GtkApplication *app,
     PlayerApp *pa
 );
+
+static gboolean restore_info_label(
+    gpointer data
+);
+
+
+/* ============================================================
+ * INFO LABEL
+ * ============================================================ */
+
+static gboolean restore_info_label(gpointer data)
+{
+    PlayerApp *pa = data;
+
+    if (!pa ||
+        !pa->info_label)
+        return G_SOURCE_REMOVE;
+
+    if (pa->filename) {
+
+        gtk_label_set_text(
+            GTK_LABEL(pa->info_label),
+            pa->filename
+        );
+
+    } else {
+
+        gtk_label_set_text(
+            GTK_LABEL(pa->info_label),
+            ""
+        );
+    }
+
+    return G_SOURCE_REMOVE;
+}
 
 
 /* ============================================================
  * CLIPBOARD
  * ============================================================ */
 
-static void show_clipboard_message(PlayerApp *pa)
+static void show_clipboard_message(
+    PlayerApp *pa)
 {
-    if (!pa->info_label || !pa->filename)
+    if (!pa ||
+        !pa->info_label ||
+        !pa->filename)
         return;
 
     char message[8192];
@@ -89,16 +87,23 @@ static void show_clipboard_message(PlayerApp *pa)
 }
 
 
-static void copy_video_path(PlayerApp *pa)
+static void copy_video_path(
+    PlayerApp *pa)
 {
-    if (!pa->filename || !pa->window)
+    if (!pa ||
+        !pa->filename ||
+        !pa->window)
         return;
 
     GdkDisplay *display =
-        gtk_widget_get_display(pa->window);
+        gtk_widget_get_display(
+            pa->window
+        );
 
     GdkClipboard *clipboard =
-        gdk_display_get_clipboard(display);
+        gdk_display_get_clipboard(
+            display
+        );
 
     gdk_clipboard_set_text(
         clipboard,
@@ -122,304 +127,6 @@ static void copy_video_path(PlayerApp *pa)
 
 
 /* ============================================================
- * MPV ZOOM
- * ============================================================ */
-
-static gboolean on_scroll(
-    GtkEventControllerScroll *controller,
-    double dx,
-    double dy,
-    PlayerApp *pa)
-{
-    (void)controller;
-    (void)dx;
-
-    if (!pa->mpv || !pa->gl_area)
-        return FALSE;
-
-    if (dy < 0)
-        pa->video_zoom += 0.25;
-    else if (dy > 0)
-        pa->video_zoom -= 0.25;
-
-    if (pa->video_zoom > 5.0)
-        pa->video_zoom = 5.0;
-
-    if (pa->video_zoom < 0.0)
-        pa->video_zoom = 0.0;
-
-    char zoom[64];
-
-    snprintf(
-        zoom,
-        sizeof(zoom),
-        "%.3f",
-        pa->video_zoom
-    );
-
-    const char *zoom_cmd[] = {
-        "set",
-        "video-zoom",
-        zoom,
-        NULL
-    };
-
-    int status = mpv_command(
-        pa->mpv,
-        zoom_cmd
-    );
-
-    if (status < 0) {
-
-        fprintf(
-            stderr,
-            "[ZOOM] ERRO: %s\n",
-            mpv_error_string(status)
-        );
-    }
-
-    fprintf(
-        stderr,
-        "[ZOOM] zoom=%.3f pan=%.3f,%.3f\n",
-        pa->video_zoom,
-        pa->video_pan_x,
-        pa->video_pan_y
-    );
-
-    return TRUE;
-}
-
-
-/* ============================================================
- * PAN
- * ============================================================ */
-
-static void mpv_set_pan(PlayerApp *pa)
-{
-    if (!pa->mpv)
-        return;
-
-    char pan_x[64];
-    char pan_y[64];
-
-    snprintf(
-        pan_x,
-        sizeof(pan_x),
-        "%.6f",
-        pa->video_pan_x
-    );
-
-    snprintf(
-        pan_y,
-        sizeof(pan_y),
-        "%.6f",
-        pa->video_pan_y
-    );
-
-    const char *cmd_x[] = {
-        "set",
-        "video-pan-x",
-        pan_x,
-        NULL
-    };
-
-    const char *cmd_y[] = {
-        "set",
-        "video-pan-y",
-        pan_y,
-        NULL
-    };
-
-    mpv_command(pa->mpv, cmd_x);
-    mpv_command(pa->mpv, cmd_y);
-}
-
-
-static void on_drag_begin(
-    GtkGestureDrag *gesture,
-    double start_x,
-    double start_y,
-    PlayerApp *pa)
-{
-    (void)gesture;
-
-    if (pa->video_zoom <= 0.0)
-        return;
-
-    pa->panning = TRUE;
-
-    pa->pan_start_x = start_x;
-    pa->pan_start_y = start_y;
-
-    pa->pan_start_pan_x =
-        pa->video_pan_x;
-
-    pa->pan_start_pan_y =
-        pa->video_pan_y;
-
-    fprintf(
-        stderr,
-        "[PAN] begin mouse=%.1f,%.1f pan=%.3f,%.3f\n",
-        start_x,
-        start_y,
-        pa->video_pan_x,
-        pa->video_pan_y
-    );
-}
-
-
-static void on_drag_update(
-    GtkGestureDrag *gesture,
-    double offset_x,
-    double offset_y,
-    PlayerApp *pa)
-{
-    (void)gesture;
-
-    if (!pa->panning)
-        return;
-
-    int width =
-        gtk_widget_get_width(pa->gl_area);
-
-    int height =
-        gtk_widget_get_height(pa->gl_area);
-
-    if (width <= 0 || height <= 0)
-        return;
-
-    double scale =
-        pow(2.0, pa->video_zoom);
-
-    double pan_x_delta =
-        offset_x / width * 2.0 / scale;
-
-    double pan_y_delta =
-        offset_y / height * 2.0 / scale;
-
-    pa->video_pan_x =
-        pa->pan_start_pan_x + pan_x_delta;
-
-    pa->video_pan_y =
-        pa->pan_start_pan_y + pan_y_delta;
-
-    if (pa->video_pan_x > 1.0)
-        pa->video_pan_x = 1.0;
-
-    if (pa->video_pan_x < -1.0)
-        pa->video_pan_x = -1.0;
-
-    if (pa->video_pan_y > 1.0)
-        pa->video_pan_y = 1.0;
-
-    if (pa->video_pan_y < -1.0)
-        pa->video_pan_y = -1.0;
-
-    mpv_set_pan(pa);
-}
-
-
-static void on_drag_end(
-    GtkGestureDrag *gesture,
-    double offset_x,
-    double offset_y,
-    PlayerApp *pa)
-{
-    (void)gesture;
-    (void)offset_x;
-    (void)offset_y;
-
-    if (!pa->panning)
-        return;
-
-    pa->panning = FALSE;
-
-    fprintf(
-        stderr,
-        "[PAN] end pan=%.3f,%.3f\n",
-        pa->video_pan_x,
-        pa->video_pan_y
-    );
-}
-
-
-/* ============================================================
- * BRIGHTNESS
- * ============================================================ */
-
-static void mpv_set_brightness(
-    PlayerApp *pa,
-    int value)
-{
-    if (!pa->mpv)
-        return;
-
-    if (value > 100)
-        value = 100;
-
-    if (value < -100)
-        value = -100;
-
-    pa->brightness = value;
-
-    char brightness[16];
-
-    snprintf(
-        brightness,
-        sizeof(brightness),
-        "%d",
-        pa->brightness
-    );
-
-    const char *command[] = {
-        "set",
-        "brightness",
-        brightness,
-        NULL
-    };
-
-    fprintf(
-        stderr,
-        "[BRIGHTNESS] %d\n",
-        pa->brightness
-    );
-
-    int status = mpv_command(
-        pa->mpv,
-        command
-    );
-
-    if (status < 0) {
-
-        fprintf(
-            stderr,
-            "[BRIGHTNESS] ERRO: %s\n",
-            mpv_error_string(status)
-        );
-
-    } else {
-
-        fprintf(
-            stderr,
-            "[BRIGHTNESS] OK -> %d\n",
-            pa->brightness
-        );
-    }
-}
-
-
-static void mpv_change_brightness(
-    PlayerApp *pa,
-    int amount)
-{
-    mpv_set_brightness(
-        pa,
-        pa->brightness + amount
-    );
-}
-
-
-/* ============================================================
  * CSS
  * ============================================================ */
 
@@ -438,434 +145,19 @@ static void setup_info_label_css(void)
         "}"
     );
 
-    gtk_style_context_add_provider_for_display(
-        gdk_display_get_default(),
-        GTK_STYLE_PROVIDER(provider),
-        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION
-    );
+    GdkDisplay *display =
+        gdk_display_get_default();
+
+    if (display) {
+
+        gtk_style_context_add_provider_for_display(
+            display,
+            GTK_STYLE_PROVIDER(provider),
+            GTK_STYLE_PROVIDER_PRIORITY_APPLICATION
+        );
+    }
 
     g_object_unref(provider);
-}
-
-
-/* ============================================================
- * INFO LABEL
- * ============================================================ */
-
-static gboolean restore_info_label(gpointer data)
-{
-    PlayerApp *pa = data;
-
-    if (!pa->info_label || !pa->filename)
-        return G_SOURCE_REMOVE;
-
-    gtk_label_set_text(
-        GTK_LABEL(pa->info_label),
-        pa->filename
-    );
-
-    return G_SOURCE_REMOVE;
-}
-
-
-/* ============================================================
- * MPV EVENTS
- * ============================================================ */
-
-static void mpv_check_events(PlayerApp *pa)
-{
-    if (!pa->mpv)
-        return;
-
-    while (1) {
-
-        mpv_event *event =
-            mpv_wait_event(pa->mpv, 0);
-
-        if (!event)
-            break;
-
-        if (event->event_id == MPV_EVENT_NONE)
-            break;
-
-        fprintf(
-            stderr,
-            "[MPV-EVENT] id=%d name=%s\n",
-            event->event_id,
-            mpv_event_name(event->event_id)
-        );
-
-        switch (event->event_id) {
-
-        case MPV_EVENT_FILE_LOADED:
-
-            fprintf(
-                stderr,
-                "[MPV-EVENT] FILE_LOADED\n"
-            );
-
-            break;
-
-
-        case MPV_EVENT_VIDEO_RECONFIG:
-
-            fprintf(
-                stderr,
-                "[MPV-EVENT] VIDEO_RECONFIG\n"
-            );
-
-            break;
-
-
-        case MPV_EVENT_PLAYBACK_RESTART:
-
-            fprintf(
-                stderr,
-                "[MPV-EVENT] PLAYBACK_RESTART\n"
-            );
-
-            break;
-
-
-        case MPV_EVENT_END_FILE: {
-
-            mpv_event_end_file *end =
-                event->data;
-
-            fprintf(
-                stderr,
-                "[MPV-EVENT] END_FILE reason=%d error=%s\n",
-                end ? (int)end->reason : -1,
-                end ? mpv_error_string(end->error) : "NULL"
-            );
-
-            break;
-        }
-
-
-        case MPV_EVENT_LOG_MESSAGE: {
-
-            mpv_event_log_message *msg =
-                event->data;
-
-            if (msg) {
-
-                fprintf(
-                    stderr,
-                    "[MPV-LOG] [%s] %s",
-                    msg->prefix,
-                    msg->text
-                );
-            }
-
-            break;
-        }
-
-
-        default:
-            break;
-        }
-    }
-}
-
-
-static gboolean mpv_event_timer(gpointer data)
-{
-    PlayerApp *pa = data;
-
-    if (!pa->mpv)
-        return G_SOURCE_REMOVE;
-
-    mpv_check_events(pa);
-
-    return G_SOURCE_CONTINUE;
-}
-
-
-/* ============================================================
- * MPV COMMAND
- * ============================================================ */
-
-static int mpv_send_command(
-    PlayerApp *pa,
-    const char *cmd,
-    const char *arg)
-{
-    if (!pa->mpv) {
-
-        fprintf(
-            stderr,
-            "[MPV-CMD] ERRO: mpv não está disponível\n"
-        );
-
-        return -1;
-    }
-
-    const char *command[3];
-
-    command[0] = cmd;
-    command[1] = arg;
-    command[2] = NULL;
-
-    fprintf(
-        stderr,
-        "[MPV-CMD] %s%s%s\n",
-        cmd,
-        arg ? " " : "",
-        arg ? arg : ""
-    );
-
-    int status = mpv_command(
-        pa->mpv,
-        command
-    );
-
-    if (status < 0) {
-
-        fprintf(
-            stderr,
-            "[MPV-CMD] ERRO: %s\n",
-            mpv_error_string(status)
-        );
-
-    } else {
-
-        fprintf(
-            stderr,
-            "[MPV-CMD] OK\n"
-        );
-    }
-
-    return status;
-}
-
-
-/* ============================================================
- * SAVE FRAME
- * ============================================================ */
-
-static void show_saved_message(PlayerApp *pa)
-{
-    if (!pa->info_label || !pa->filename)
-        return;
-
-    char path[4096];
-
-    snprintf(
-        path,
-        sizeof(path),
-        "%s",
-        pa->filename
-    );
-
-    char *filename = basename(path);
-
-    char name[4096];
-
-    snprintf(
-        name,
-        sizeof(name),
-        "%s",
-        filename
-    );
-
-    char *dot = strrchr(name, '.');
-
-    if (dot)
-        *dot = '\0';
-
-    char message[8192];
-
-    snprintf(
-        message,
-        sizeof(message),
-        "%s\nFrame %.*s salvo",
-        pa->filename,
-        (int)(sizeof(message) - strlen(pa->filename) - 20),
-        name
-    );
-
-    gtk_label_set_text(
-        GTK_LABEL(pa->info_label),
-        message
-    );
-}
-
-
-static void mpv_save_frame(PlayerApp *pa)
-{
-    if (!pa->mpv || !pa->filename)
-        return;
-
-    char path[4096];
-
-    snprintf(
-        path,
-        sizeof(path),
-        "%s",
-        pa->filename
-    );
-
-    char *dir = dirname(path);
-
-    fprintf(
-        stderr,
-        "[SCREENSHOT] diretório = %s\n",
-        dir
-    );
-
-    int status = mpv_set_option_string(
-        pa->mpv,
-        "screenshot-dir",
-        dir
-    );
-
-    if (status < 0) {
-
-        fprintf(
-            stderr,
-            "[SCREENSHOT] ERRO screenshot-dir: %s\n",
-            mpv_error_string(status)
-        );
-
-        return;
-    }
-
-    status = mpv_set_option_string(
-        pa->mpv,
-        "screenshot-template",
-        "%F_%n"
-    );
-
-    if (status < 0) {
-
-        fprintf(
-            stderr,
-            "[SCREENSHOT] ERRO screenshot-template: %s\n",
-            mpv_error_string(status)
-        );
-
-        return;
-    }
-
-    const char *command[] = {
-        "screenshot",
-        "video",
-        NULL
-    };
-
-    fprintf(
-        stderr,
-        "[SCREENSHOT] salvando frame\n"
-    );
-
-    status = mpv_command(
-        pa->mpv,
-        command
-    );
-
-    if (status < 0) {
-
-        fprintf(
-            stderr,
-            "[SCREENSHOT] ERRO: %s\n",
-            mpv_error_string(status)
-        );
-
-    } else {
-
-        fprintf(
-            stderr,
-            "[SCREENSHOT] OK\n"
-        );
-
-        show_saved_message(pa);
-
-        g_timeout_add(
-            2000,
-            restore_info_label,
-            pa
-        );
-    }
-}
-
-
-/* ============================================================
- * ROTATE
- * ============================================================ */
-
-static void mpv_rotate_video(PlayerApp *pa)
-{
-    if (!pa->mpv)
-        return;
-
-    pa->video_rotation += 90;
-
-    if (pa->video_rotation >= 360)
-        pa->video_rotation = 0;
-
-    char rotation[16];
-
-    snprintf(
-        rotation,
-        sizeof(rotation),
-        "%d",
-        pa->video_rotation
-    );
-
-    fprintf(
-        stderr,
-        "[ROTATE] video-rotate=%s\n",
-        rotation
-    );
-
-    const char *command[] = {
-        "set",
-        "video-rotate",
-        rotation,
-        NULL
-    };
-
-    int status = mpv_command(
-        pa->mpv,
-        command
-    );
-
-    if (status < 0) {
-
-        fprintf(
-            stderr,
-            "[ROTATE] ERRO: %s\n",
-            mpv_error_string(status)
-        );
-
-    } else {
-
-        fprintf(
-            stderr,
-            "[ROTATE] OK -> %d graus\n",
-            pa->video_rotation
-        );
-    }
-}
-
-
-/* ============================================================
- * PAUSE / PLAY
- * ============================================================ */
-
-static void mpv_toggle_pause(PlayerApp *pa)
-{
-    fprintf(
-        stderr,
-        "[MPV] PAUSE/PLAY\n"
-    );
-
-    mpv_send_command(
-        pa,
-        "cycle",
-        "pause"
-    );
 }
 
 
@@ -884,12 +176,19 @@ static gboolean on_key_pressed(
     (void)keycode;
     (void)state;
 
+    if (!pa)
+        return FALSE;
+
     fprintf(
         stderr,
         "[KEY] keyval=0x%x\n",
         keyval
     );
 
+
+    /* --------------------------------------------------------
+     * Q -> SAIR
+     * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_q ||
         keyval == GDK_KEY_Q) {
@@ -899,56 +198,91 @@ static gboolean on_key_pressed(
             "[KEY] Q DETECTADO -> saindo\n"
         );
 
-        gtk_window_destroy(
-            GTK_WINDOW(pa->window)
-        );
+        if (pa->window) {
+
+            gtk_window_destroy(
+                GTK_WINDOW(pa->window)
+            );
+        }
 
         return TRUE;
     }
 
+
+    /* --------------------------------------------------------
+     * SPACE -> PAUSE / PLAY
+     * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_space) {
 
-        mpv_toggle_pause(pa);
+        if (pa->player) {
+
+            player_toggle_pause(
+                pa->player
+            );
+        }
 
         return TRUE;
     }
 
+
+    /* --------------------------------------------------------
+     * K -> FRAME ANTERIOR
+     * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_k ||
         keyval == GDK_KEY_K) {
 
-        mpv_send_command(
-            pa,
-            "frame-back-step",
-            NULL
-        );
+        if (pa->player) {
+
+            player_frame_back(
+                pa->player
+            );
+        }
 
         return TRUE;
     }
 
+
+    /* --------------------------------------------------------
+     * J -> PRÓXIMO FRAME
+     * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_j ||
         keyval == GDK_KEY_J) {
 
-        mpv_send_command(
-            pa,
-            "frame-step",
-            NULL
-        );
+        if (pa->player) {
+
+            player_frame_forward(
+                pa->player
+            );
+        }
 
         return TRUE;
     }
 
+
+    /* --------------------------------------------------------
+     * S -> SCREENSHOT
+     * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_s ||
         keyval == GDK_KEY_S) {
 
-        mpv_save_frame(pa);
+        if (pa->player) {
+
+            player_save_frame(
+                pa->player
+            );
+        }
 
         return TRUE;
     }
 
+
+    /* --------------------------------------------------------
+     * Y -> COPIAR PATH
+     * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_y ||
         keyval == GDK_KEY_Y) {
@@ -959,71 +293,78 @@ static gboolean on_key_pressed(
     }
 
 
+    /* --------------------------------------------------------
+     * R -> ROTATE
+     * -------------------------------------------------------- */
+
     if (keyval == GDK_KEY_r ||
         keyval == GDK_KEY_R) {
 
-        mpv_rotate_video(pa);
+        if (pa->player) {
+
+            player_rotate(
+                pa->player
+            );
+        }
 
         return TRUE;
     }
 
+
+    /* --------------------------------------------------------
+     * U -> BRIGHTNESS +
+     * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_u ||
         keyval == GDK_KEY_U) {
 
-        mpv_change_brightness(pa, 5);
+        if (pa->player) {
+
+            player_change_brightness(
+                pa->player,
+                5
+            );
+        }
 
         return TRUE;
     }
 
+
+    /* --------------------------------------------------------
+     * I -> BRIGHTNESS -
+     * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_i ||
         keyval == GDK_KEY_I) {
 
-        mpv_change_brightness(pa, -5);
+        if (pa->player) {
+
+            player_change_brightness(
+                pa->player,
+                -5
+            );
+        }
 
         return TRUE;
     }
 
+
+    /* --------------------------------------------------------
+     * 0 -> RESET ZOOM / PAN
+     * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_0) {
 
-        fprintf(
-            stderr,
-            "[KEY] 0 -> reset zoom\n"
-        );
+        if (pa->player) {
 
-        pa->video_zoom = 0.0;
-        pa->video_pan_x = 0.0;
-        pa->video_pan_y = 0.0;
-
-        const char *cmd_zoom[] = {
-            "set",
-            "video-zoom",
-            "0",
-            NULL
-        };
-
-        const char *cmd_pan_x[] = {
-            "set",
-            "video-pan-x",
-            "0",
-            NULL
-        };
-
-        const char *cmd_pan_y[] = {
-            "set",
-            "video-pan-y",
-            "0",
-            NULL
-        };
-
-        mpv_command(pa->mpv, cmd_zoom);
-        mpv_command(pa->mpv, cmd_pan_x);
-        mpv_command(pa->mpv, cmd_pan_y);
+            player_reset_view(
+                pa->player
+            );
+        }
 
         return TRUE;
     }
+
 
     return FALSE;
 }
@@ -1033,11 +374,13 @@ static gboolean on_key_pressed(
  * MPV -> GTK RENDER
  * ============================================================ */
 
-static gboolean mpv_queue_render_idle(gpointer data)
+static gboolean mpv_queue_render_idle(
+    gpointer data)
 {
     PlayerApp *pa = data;
 
-    if (!pa->gl_area)
+    if (!pa ||
+        !pa->gl_area)
         return G_SOURCE_REMOVE;
 
     gtk_gl_area_queue_render(
@@ -1048,9 +391,13 @@ static gboolean mpv_queue_render_idle(gpointer data)
 }
 
 
-static void on_mpv_update(void *ctx)
+static void on_mpv_update(
+    void *ctx)
 {
     PlayerApp *pa = ctx;
+
+    if (!pa)
+        return;
 
     g_main_context_invoke(
         NULL,
@@ -1058,23 +405,6 @@ static void on_mpv_update(void *ctx)
         pa
     );
 }
-
-
-/* ============================================================
- * OPENGL
- * ============================================================ */
-
-static void *mpv_get_proc_address(
-    void *ctx,
-    const char *name)
-{
-    (void)ctx;
-
-    return (void *)glXGetProcAddressARB(
-        (const GLubyte *)name
-    );
-}
-
 
 /* ============================================================
  * GtkGLArea REALIZE
@@ -1149,14 +479,20 @@ static void on_gl_realize(
     fprintf(
         stderr,
         "[MPV] LC_NUMERIC antes = %s\n",
-        setlocale(LC_NUMERIC, NULL)
+        setlocale(
+            LC_NUMERIC,
+            NULL
+        )
     );
 
-    if (setlocale(LC_NUMERIC, "C") == NULL) {
+    if (setlocale(
+            LC_NUMERIC,
+            "C") == NULL) {
 
         fprintf(
             stderr,
-            "[MPV] ERRO: não foi possível definir LC_NUMERIC=C\n"
+            "[MPV] ERRO: não foi possível definir "
+            "LC_NUMERIC=C\n"
         );
 
         return;
@@ -1165,242 +501,68 @@ static void on_gl_realize(
     fprintf(
         stderr,
         "[MPV] LC_NUMERIC depois = %s\n",
-        setlocale(LC_NUMERIC, NULL)
-    );
-
-
-    /* --------------------------------------------------------
-     * MPV CREATE
-     * -------------------------------------------------------- */
-
-    fprintf(
-        stderr,
-        "[MPV] chamando mpv_create()\n"
-    );
-
-    pa->mpv = mpv_create();
-
-    if (!pa->mpv) {
-
-        fprintf(
-            stderr,
-            "[MPV] ERRO: mpv_create() retornou NULL\n"
-        );
-
-        return;
-    }
-
-    fprintf(
-        stderr,
-        "[MPV] mpv_create() OK\n"
-    );
-
-
-    mpv_set_option_string(
-        pa->mpv,
-        "terminal",
-        "yes"
-    );
-
-    mpv_set_option_string(
-        pa->mpv,
-        "msg-level",
-        "all=warn"
-    );
-
-
-    /* --------------------------------------------------------
-     * VO
-     * -------------------------------------------------------- */
-
-    int status = mpv_set_option_string(
-        pa->mpv,
-        "vo",
-        "libmpv"
-    );
-
-    if (status < 0) {
-
-        fprintf(
-            stderr,
-            "[MPV] ERRO: vo=libmpv: %s\n",
-            mpv_error_string(status)
-        );
-
-        mpv_terminate_destroy(pa->mpv);
-        pa->mpv = NULL;
-
-        return;
-    }
-
-
-    /* --------------------------------------------------------
-     * LOOP
-     * -------------------------------------------------------- */
-
-    status = mpv_set_option_string(
-        pa->mpv,
-        "loop-file",
-        "yes"
-    );
-
-    if (status < 0) {
-
-        fprintf(
-            stderr,
-            "[MPV] ERRO: loop-file=yes: %s\n",
-            mpv_error_string(status)
-        );
-    }
-
-
-    /* --------------------------------------------------------
-     * HWDEC
-     * -------------------------------------------------------- */
-
-    status = mpv_set_option_string(
-        pa->mpv,
-        "hwdec",
-        "auto"
-    );
-
-    if (status < 0) {
-
-        fprintf(
-            stderr,
-            "[MPV] ERRO: hwdec=auto: %s\n",
-            mpv_error_string(status)
-        );
-
-        mpv_terminate_destroy(pa->mpv);
-        pa->mpv = NULL;
-
-        return;
-    }
-
-
-    /* --------------------------------------------------------
-     * MPV INITIALIZE
-     * -------------------------------------------------------- */
-
-    status = mpv_initialize(pa->mpv);
-
-    if (status < 0) {
-
-        fprintf(
-            stderr,
-            "[MPV] ERRO em mpv_initialize(): %s\n",
-            mpv_error_string(status)
-        );
-
-        mpv_terminate_destroy(pa->mpv);
-        pa->mpv = NULL;
-
-        return;
-    }
-
-    fprintf(
-        stderr,
-        "[MPV] mpv_initialize() OK\n"
-    );
-
-
-    /* --------------------------------------------------------
-     * RENDER CONTEXT
-     * -------------------------------------------------------- */
-
-    mpv_opengl_init_params gl_init = {
-        .get_proc_address = mpv_get_proc_address,
-        .get_proc_address_ctx = NULL
-    };
-
-    mpv_render_param params[] = {
-
-        {
-            MPV_RENDER_PARAM_API_TYPE,
-            (void *)MPV_RENDER_API_TYPE_OPENGL
-        },
-
-        {
-            MPV_RENDER_PARAM_OPENGL_INIT_PARAMS,
-            &gl_init
-        },
-
-        {
-            MPV_RENDER_PARAM_INVALID,
+        setlocale(
+            LC_NUMERIC,
             NULL
-        }
-    };
+        )
+    );
 
 
-    int render_status =
-        mpv_render_context_create(
-            &pa->mpv_render,
-            pa->mpv,
-            params
-        );
+    /* --------------------------------------------------------
+     * CRIA PLAYER
+     * -------------------------------------------------------- */
 
-    if (render_status < 0) {
+    pa->player =
+        player_new();
+
+    if (!pa->player) {
 
         fprintf(
             stderr,
-            "[MPV-RENDER] ERRO: %s\n",
-            mpv_error_string(render_status)
+            "[PLAYER] ERRO: não foi possível criar Player\n"
         );
-
-        mpv_terminate_destroy(pa->mpv);
-        pa->mpv = NULL;
 
         return;
     }
 
 
-    fprintf(
-        stderr,
-        "[MPV-RENDER] mpv_render_context criado: %p\n",
-        (void *)pa->mpv_render
-    );
+    /* --------------------------------------------------------
+     * CONFIGURA MPV
+     * -------------------------------------------------------- */
 
-
-    mpv_render_context_set_update_callback(
-        pa->mpv_render,
+    int status = player_initialize(
+        pa->player,
+        pa->filename,
         on_mpv_update,
         pa
     );
 
-
-    /* --------------------------------------------------------
-     * LOAD FILE
-     * -------------------------------------------------------- */
-
-    if (pa->filename) {
+    if (status < 0) {
 
         fprintf(
             stderr,
-            "[MPV] carregando arquivo: %s\n",
-            pa->filename
+            "[PLAYER] ERRO ao inicializar player: %s\n",
+            mpv_error_string(status)
         );
 
-        const char *cmd[] = {
-            "loadfile",
-            pa->filename,
-            NULL
-        };
-
-        status = mpv_command(
-            pa->mpv,
-            cmd
+        player_free(
+            pa->player
         );
 
-        if (status < 0) {
+        pa->player = NULL;
 
-            fprintf(
-                stderr,
-                "[MPV] ERRO loadfile: %s\n",
-                mpv_error_string(status)
-            );
-        }
+        return;
     }
+
+    fprintf(
+        stderr,
+        "[PLAYER] inicializado com sucesso\n"
+    );
+
+    gtk_gl_area_queue_render(
+        GTK_GL_AREA(pa->gl_area)
+    );
+
 }
 
 
@@ -1412,50 +574,26 @@ static void on_gl_unrealize(
     GtkGLArea *area,
     PlayerApp *pa)
 {
+    (void)area;
+
     fprintf(
         stderr,
         "[GL] UNREALIZE GtkGLArea\n"
     );
 
-    (void)area;
-
-    if (pa->mpv_event_source) {
-
-        g_source_remove(
-            pa->mpv_event_source
-        );
-
-        pa->mpv_event_source = 0;
-    }
-
-
-    if (pa->mpv_render) {
+    if (pa &&
+        pa->player) {
 
         fprintf(
             stderr,
-            "[MPV-RENDER] destruindo render context\n"
+            "[PLAYER] destruindo player\n"
         );
 
-        mpv_render_context_free(
-            pa->mpv_render
+        player_free(
+            pa->player
         );
 
-        pa->mpv_render = NULL;
-    }
-
-
-    if (pa->mpv) {
-
-        fprintf(
-            stderr,
-            "[MPV] destruindo mpv\n"
-        );
-
-        mpv_terminate_destroy(
-            pa->mpv
-        );
-
-        pa->mpv = NULL;
+        pa->player = NULL;
     }
 }
 
@@ -1493,6 +631,11 @@ static gboolean on_gl_render(
 {
     (void)ctx;
 
+    fprintf(
+        stderr,
+        "[GL] RENDER\n"
+    );
+
     int width =
         gtk_widget_get_width(
             GTK_WIDGET(area)
@@ -1503,12 +646,18 @@ static gboolean on_gl_render(
             GTK_WIDGET(area)
         );
 
-
-    if (width <= 0 || height <= 0)
+    if (width <= 0 ||
+        height <= 0)
         return TRUE;
 
 
-    if (!pa->mpv_render) {
+    /* --------------------------------------------------------
+     * PLAYER AINDA NÃO DISPONÍVEL
+     * -------------------------------------------------------- */
+
+    if (!pa ||
+        !pa->player ||
+        !player_get_render_context(pa->player)) {
 
         glClearColor(
             0.2f,
@@ -1525,6 +674,10 @@ static gboolean on_gl_render(
     }
 
 
+    /* --------------------------------------------------------
+     * VIEWPORT
+     * -------------------------------------------------------- */
+
     glViewport(
         0,
         0,
@@ -1532,6 +685,10 @@ static gboolean on_gl_render(
         height
     );
 
+
+    /* --------------------------------------------------------
+     * FBO DO GTK
+     * -------------------------------------------------------- */
 
     GLint current_fbo = 0;
 
@@ -1542,6 +699,7 @@ static gboolean on_gl_render(
 
 
     mpv_opengl_fbo fbo = {
+
         .fbo = current_fbo,
         .w = width,
         .h = height,
@@ -1549,8 +707,16 @@ static gboolean on_gl_render(
     };
 
 
+    /* --------------------------------------------------------
+     * FLIP Y
+     * -------------------------------------------------------- */
+
     int flip_y = 1;
 
+
+    /* --------------------------------------------------------
+     * PARÂMETROS MPV
+     * -------------------------------------------------------- */
 
     mpv_render_param params[] = {
 
@@ -1571,9 +737,15 @@ static gboolean on_gl_render(
     };
 
 
+    /* --------------------------------------------------------
+     * RENDER
+     * -------------------------------------------------------- */
+
     int status =
         mpv_render_context_render(
-            pa->mpv_render,
+            player_get_render_context(
+                pa->player
+            ),
             params
         );
 
@@ -1588,8 +760,14 @@ static gboolean on_gl_render(
     }
 
 
+    /* --------------------------------------------------------
+     * REPORT SWAP
+     * -------------------------------------------------------- */
+
     mpv_render_context_report_swap(
-        pa->mpv_render
+        player_get_render_context(
+            pa->player
+        )
     );
 
 
@@ -1657,9 +835,14 @@ static void on_window_map(
  * FOCUS
  * ============================================================ */
 
-static gboolean grab_gl_focus(gpointer data)
+static gboolean grab_gl_focus(
+    gpointer data)
 {
     PlayerApp *pa = data;
+
+    if (!pa ||
+        !pa->gl_area)
+        return G_SOURCE_REMOVE;
 
     gtk_widget_grab_focus(
         pa->gl_area
@@ -1668,10 +851,119 @@ static gboolean grab_gl_focus(gpointer data)
     fprintf(
         stderr,
         "[gtk] foco GtkGLArea = %d\n",
-        gtk_widget_has_focus(pa->gl_area)
+        gtk_widget_has_focus(
+            pa->gl_area
+        )
     );
 
     return G_SOURCE_REMOVE;
+}
+
+
+/* ============================================================
+ * ZOOM
+ * ============================================================ */
+
+static gboolean on_scroll(
+    GtkEventControllerScroll *controller,
+    double dx,
+    double dy,
+    PlayerApp *pa)
+{
+    (void)controller;
+    (void)dx;
+
+    if (!pa ||
+        !pa->player)
+        return FALSE;
+
+    player_change_zoom(
+        pa->player,
+        dy
+    );
+
+    return TRUE;
+}
+
+
+/* ============================================================
+ * PAN
+ * ============================================================ */
+
+static void on_drag_begin(
+    GtkGestureDrag *gesture,
+    double start_x,
+    double start_y,
+    PlayerApp *pa)
+{
+    (void)gesture;
+
+    if (!pa ||
+        !pa->player)
+        return;
+
+    /*
+     * A API do Player agora recebe somente
+     * player + posição inicial.
+     */
+
+    player_pan_begin(
+        pa->player,
+        start_x,
+        start_y
+    );
+}
+
+
+static void on_drag_update(
+    GtkGestureDrag *gesture,
+    double offset_x,
+    double offset_y,
+    PlayerApp *pa)
+{
+    (void)gesture;
+
+    if (!pa ||
+        !pa->player)
+        return;
+
+    int width =
+        gtk_widget_get_width(
+            pa->gl_area
+        );
+
+    int height =
+        gtk_widget_get_height(
+            pa->gl_area
+        );
+
+    player_pan_update(
+        pa->player,
+        offset_x,
+        offset_y,
+        width,
+        height
+    );
+}
+
+
+static void on_drag_end(
+    GtkGestureDrag *gesture,
+    double offset_x,
+    double offset_y,
+    PlayerApp *pa)
+{
+    (void)gesture;
+    (void)offset_x;
+    (void)offset_y;
+
+    if (!pa ||
+        !pa->player)
+        return;
+
+    player_pan_end(
+        pa->player
+    );
 }
 
 
@@ -1689,8 +981,14 @@ static void on_activate(
     );
 
 
+    /* --------------------------------------------------------
+     * WINDOW
+     * -------------------------------------------------------- */
+
     pa->window =
-        gtk_application_window_new(app);
+        gtk_application_window_new(
+            app
+        );
 
 
     gtk_window_set_title(
@@ -1765,10 +1063,20 @@ static void on_activate(
     );
 
 
-    gtk_label_set_text(
-        GTK_LABEL(pa->info_label),
-        pa->filename
-    );
+    if (pa->filename) {
+
+        gtk_label_set_text(
+            GTK_LABEL(pa->info_label),
+            pa->filename
+        );
+
+    } else {
+
+        gtk_label_set_text(
+            GTK_LABEL(pa->info_label),
+            ""
+        );
+    }
 
 
     gtk_widget_set_halign(
@@ -1965,24 +1273,28 @@ static void on_activate(
     );
 
 
+    /* --------------------------------------------------------
+     * RENDER MANUAL
+     * -------------------------------------------------------- */
+
     gtk_gl_area_set_auto_render(
         GTK_GL_AREA(pa->gl_area),
         FALSE
     );
 
 
+    /* --------------------------------------------------------
+     * MOSTRA WINDOW
+     * -------------------------------------------------------- */
+
     gtk_window_present(
         GTK_WINDOW(pa->window)
     );
 
 
-    pa->mpv_event_source =
-        g_timeout_add(
-            10,
-            mpv_event_timer,
-            pa
-        );
-
+    /* --------------------------------------------------------
+     * FOCO
+     * -------------------------------------------------------- */
 
     g_idle_add(
         grab_gl_focus,
@@ -1995,42 +1307,52 @@ static void on_activate(
  * PUBLIC API
  * ============================================================ */
 
-PlayerApp *player_app_new(const char *filename)
+PlayerApp *player_app_new(
+    const char *filename)
 {
     PlayerApp *pa =
-        calloc(1, sizeof(PlayerApp));
+        calloc(
+            1,
+            sizeof(PlayerApp)
+        );
 
     if (!pa)
         return NULL;
 
+
+    pa->app = NULL;
+    pa->window = NULL;
+    pa->gl_area = NULL;
+    pa->info_label = NULL;
+
+    pa->player = NULL;
+
     pa->filename = filename;
 
-    pa->video_zoom = 0.0;
-    pa->video_pan_x = 0.0;
-    pa->video_pan_y = 0.0;
-
-    pa->brightness = 0;
-    pa->video_rotation = 0;
 
     return pa;
 }
 
+
+/* ============================================================
+ * RUN
+ * ============================================================ */
 
 int player_app_run(
     PlayerApp *pa,
     int argc,
     char **argv)
 {
-    (void)argc;
-
     if (!pa)
         return EXIT_FAILURE;
+
 
     pa->app =
         gtk_application_new(
             "dev.local.gpiv-test",
             G_APPLICATION_NON_UNIQUE
         );
+
 
     g_signal_connect(
         pa->app,
@@ -2044,12 +1366,16 @@ int player_app_run(
      * Não entregar os argumentos do vídeo
      * para o GApplication.
      */
+
     int gtk_argc = 1;
 
     char *gtk_argv[] = {
         argv[0],
         NULL
     };
+
+
+    (void)argc;
 
 
     int status =
@@ -2060,23 +1386,42 @@ int player_app_run(
         );
 
 
-    g_object_unref(pa->app);
+    g_object_unref(
+        pa->app
+    );
 
     pa->app = NULL;
+
 
     return status;
 }
 
 
-void player_app_free(PlayerApp *pa)
+/* ============================================================
+ * FREE
+ * ============================================================ */
+
+void player_app_free(
+    PlayerApp *pa)
 {
     if (!pa)
         return;
 
+
     /*
-     * Em condições normais o GtkGLArea
-     * já terá chamado unrealize e destruído mpv.
+     * Normalmente GtkGLArea já chamou
+     * on_gl_unrealize().
      */
+
+    if (pa->player) {
+
+        player_free(
+            pa->player
+        );
+
+        pa->player = NULL;
+    }
+
 
     free(pa);
 }
