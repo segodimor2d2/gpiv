@@ -6,6 +6,7 @@
 #include <mpv/client.h>
 #include <mpv/render_gl.h>
 #include <libgen.h>
+#include <math.h>
 
 typedef struct {
     GtkApplication *app;
@@ -18,6 +19,15 @@ typedef struct {
     guint mpv_event_source;
     int video_rotation;
     int brightness;
+    double video_zoom;
+    double video_pan_x;
+    double video_pan_y;
+
+    gboolean panning;
+    double pan_start_x;
+    double pan_start_y;
+    double pan_start_pan_x;
+    double pan_start_pan_y;
 } PlayerApp;
 
 /* Protótipos */
@@ -73,6 +83,384 @@ static void copy_video_path(PlayerApp *pa)
         2000,
         restore_info_label,
         pa
+    );
+}
+
+/* ============================================================
+* MPV_Zoom
+* ============================================================ */
+
+static gboolean on_scroll(
+    GtkEventControllerScroll *controller,
+    double dx,
+    double dy,
+    PlayerApp *pa)
+{
+    (void)controller;
+    (void)dx;
+
+    if (!pa->mpv || !pa->gl_area)
+        return FALSE;
+
+    /*
+     * Posição do mouse dentro do GtkGLArea.
+     */
+    double mouse_x;
+    double mouse_y;
+
+    GdkDevice *device =
+        gtk_event_controller_get_current_event_device(
+            GTK_EVENT_CONTROLLER(controller));
+
+    GdkSurface *surface =
+        gtk_native_get_surface(
+            gtk_widget_get_native(pa->gl_area));
+
+    if (!device || !surface)
+        return FALSE;
+
+    GdkDisplay *display =
+        gtk_widget_get_display(pa->gl_area);
+
+    GdkSeat *seat =
+        gdk_display_get_default_seat(display);
+
+    GdkDevice *pointer =
+        gdk_seat_get_pointer(seat);
+
+    if (!pointer)
+        return FALSE;
+
+    double surface_x;
+    double surface_y;
+
+    gdk_surface_get_device_position(
+        surface,
+        pointer,
+        &surface_x,
+        &surface_y,
+        NULL
+    );
+
+    mouse_x = surface_x;
+    mouse_y = surface_y;
+
+    int width =
+        gtk_widget_get_width(pa->gl_area);
+
+    int height =
+        gtk_widget_get_height(pa->gl_area);
+
+    if (width <= 0 || height <= 0)
+        return FALSE;
+
+    /*
+     * Normaliza o mouse:
+     *
+     * -1 = esquerda / cima
+     *  0 = centro
+     * +1 = direita / baixo
+     */
+    double mx =
+        (mouse_x / width) * 2.0 - 1.0;
+
+    double my =
+        (mouse_y / height) * 2.0 - 1.0;
+
+    /*
+     * Scroll para cima -> zoom in
+     * Scroll para baixo -> zoom out
+     */
+    double old_zoom = pa->video_zoom;
+
+    if (dy < 0)
+        pa->video_zoom += 0.25;
+    else if (dy > 0)
+        pa->video_zoom -= 0.25;
+
+    /*
+     * Limites.
+     */
+    if (pa->video_zoom > 5.0)
+        pa->video_zoom = 5.0;
+
+    if (pa->video_zoom < -5.0)
+        pa->video_zoom = -5.0;
+
+    /*
+     * Fator de escala antes/depois.
+     *
+     * video-zoom usa:
+     *
+     *     escala = 2 ^ zoom
+     */
+    double old_scale = pow(2.0, old_zoom);
+    double new_scale = pow(2.0, pa->video_zoom);
+
+    /*
+     * Mantém o ponto sob o mouse.
+     *
+     * O pan é relativo ao tamanho do vídeo escalado.
+     */
+    if (new_scale > 0.0) {
+
+        double delta_scale =
+            (new_scale - old_scale) / new_scale;
+
+        pa->video_pan_x +=
+            mx * delta_scale;
+
+        pa->video_pan_y +=
+            my * delta_scale;
+    }
+
+    /*
+     * Limita o pan.
+     */
+    if (pa->video_pan_x > 1.0)
+        pa->video_pan_x = 1.0;
+
+    if (pa->video_pan_x < -1.0)
+        pa->video_pan_x = -1.0;
+
+    if (pa->video_pan_y > 1.0)
+        pa->video_pan_y = 1.0;
+
+    if (pa->video_pan_y < -1.0)
+        pa->video_pan_y = -1.0;
+
+    /*
+     * Envia zoom.
+     */
+    char zoom[64];
+
+    snprintf(
+        zoom,
+        sizeof(zoom),
+        "%.3f",
+        pa->video_zoom
+    );
+
+    const char *zoom_cmd[] = {
+        "set",
+        "video-zoom",
+        zoom,
+        NULL
+    };
+
+    mpv_command(
+        pa->mpv,
+        zoom_cmd
+    );
+
+    /*
+     * Envia pan X.
+     */
+    char pan_x[64];
+
+    snprintf(
+        pan_x,
+        sizeof(pan_x),
+        "%.6f",
+        pa->video_pan_x
+    );
+
+    const char *pan_x_cmd[] = {
+        "set",
+        "video-pan-x",
+        pan_x,
+        NULL
+    };
+
+    mpv_command(
+        pa->mpv,
+        pan_x_cmd
+    );
+
+    /*
+     * Envia pan Y.
+     */
+    char pan_y[64];
+
+    snprintf(
+        pan_y,
+        sizeof(pan_y),
+        "%.6f",
+        pa->video_pan_y
+    );
+
+    const char *pan_y_cmd[] = {
+        "set",
+        "video-pan-y",
+        pan_y,
+        NULL
+    };
+
+    mpv_command(
+        pa->mpv,
+        pan_y_cmd
+    );
+
+    fprintf(
+        stderr,
+        "[ZOOM] mouse=%.2f,%.2f zoom=%.3f pan=%.3f,%.3f\n",
+        mx,
+        my,
+        pa->video_zoom,
+        pa->video_pan_x,
+        pa->video_pan_y
+    );
+
+    return TRUE;
+}
+
+
+static void mpv_set_pan(PlayerApp *pa)
+{
+    if (!pa->mpv)
+        return;
+
+    char pan_x[64];
+    char pan_y[64];
+
+    snprintf(
+        pan_x,
+        sizeof(pan_x),
+        "%.6f",
+        pa->video_pan_x
+    );
+
+    snprintf(
+        pan_y,
+        sizeof(pan_y),
+        "%.6f",
+        pa->video_pan_y
+    );
+
+    const char *cmd_x[] = {
+        "set",
+        "video-pan-x",
+        pan_x,
+        NULL
+    };
+
+    const char *cmd_y[] = {
+        "set",
+        "video-pan-y",
+        pan_y,
+        NULL
+    };
+
+    mpv_command(pa->mpv, cmd_x);
+    mpv_command(pa->mpv, cmd_y);
+}
+
+
+static void on_drag_begin(
+    GtkGestureDrag *gesture,
+    double start_x,
+    double start_y,
+    PlayerApp *pa)
+{
+    (void)gesture;
+
+    /*
+     * Não faz pan se estiver no zoom normal.
+     */
+    if (pa->video_zoom <= 0.0)
+        return;
+
+    pa->panning = TRUE;
+
+    pa->pan_start_x = start_x;
+    pa->pan_start_y = start_y;
+
+    pa->pan_start_pan_x =
+        pa->video_pan_x;
+
+    pa->pan_start_pan_y =
+        pa->video_pan_y;
+
+    fprintf(
+        stderr,
+        "[PAN] begin mouse=%.1f,%.1f pan=%.3f,%.3f\n",
+        start_x,
+        start_y,
+        pa->video_pan_x,
+        pa->video_pan_y
+    );
+}
+
+static void on_drag_update(
+    GtkGestureDrag *gesture,
+    double offset_x,
+    double offset_y,
+    PlayerApp *pa)
+{
+    (void)gesture;
+
+    if (!pa->panning)
+        return;
+
+    int width =
+        gtk_widget_get_width(pa->gl_area);
+
+    int height =
+        gtk_widget_get_height(pa->gl_area);
+
+    if (width <= 0 || height <= 0)
+        return;
+
+    double scale =
+        pow(2.0, pa->video_zoom);
+
+    double pan_x_delta =
+        offset_x / width * 2.0 / scale;
+
+    double pan_y_delta =
+        offset_y / height * 2.0 / scale;
+
+    pa->video_pan_x =
+        pa->pan_start_pan_x + pan_x_delta;
+
+    pa->video_pan_y =
+        pa->pan_start_pan_y + pan_y_delta;
+
+    if (pa->video_pan_x > 1.0)
+        pa->video_pan_x = 1.0;
+
+    if (pa->video_pan_x < -1.0)
+        pa->video_pan_x = -1.0;
+
+    if (pa->video_pan_y > 1.0)
+        pa->video_pan_y = 1.0;
+
+    if (pa->video_pan_y < -1.0)
+        pa->video_pan_y = -1.0;
+
+    mpv_set_pan(pa);
+}
+
+static void on_drag_end(
+    GtkGestureDrag *gesture,
+    double offset_x,
+    double offset_y,
+    PlayerApp *pa)
+{
+    (void)gesture;
+    (void)offset_x;
+    (void)offset_y;
+
+    if (!pa->panning)
+        return;
+
+    pa->panning = FALSE;
+
+    fprintf(
+        stderr,
+        "[PAN] end pan=%.3f,%.3f\n",
+        pa->video_pan_x,
+        pa->video_pan_y
     );
 }
 
@@ -713,6 +1101,48 @@ static gboolean on_key_pressed(
 
         return TRUE;
     }
+
+
+    /* --------------------------------------------------------
+     * 0 -> RESET ZOOM
+     * -------------------------------------------------------- */
+    if (keyval == GDK_KEY_0) {
+
+        fprintf(stderr,
+                "[KEY] 0 -> reset zoom\n");
+
+        pa->video_zoom = 0.0;
+        pa->video_pan_x = 0.0;
+        pa->video_pan_y = 0.0;
+
+        const char *cmd_zoom[] = {
+            "set",
+            "video-zoom",
+            "0",
+            NULL
+        };
+
+        const char *cmd_pan_x[] = {
+            "set",
+            "video-pan-x",
+            "0",
+            NULL
+        };
+
+        const char *cmd_pan_y[] = {
+            "set",
+            "video-pan-y",
+            "0",
+            NULL
+        };
+
+        mpv_command(pa->mpv, cmd_zoom);
+        mpv_command(pa->mpv, cmd_pan_x);
+        mpv_command(pa->mpv, cmd_pan_y);
+
+        return TRUE;
+    }
+
 
 
     /* --------------------------------------------------------
@@ -1481,6 +1911,42 @@ static void on_activate(
 
 
     /* --------------------------------------------------------
+     * GTKGESTUREDRAG
+     * -------------------------------------------------------- */
+
+    GtkGestureDrag *drag =
+        GTK_GESTURE_DRAG(
+            gtk_gesture_drag_new()
+        );
+
+    g_signal_connect(
+        drag,
+        "drag-begin",
+        G_CALLBACK(on_drag_begin),
+        pa
+    );
+
+    g_signal_connect(
+        drag,
+        "drag-update",
+        G_CALLBACK(on_drag_update),
+        pa
+    );
+
+    g_signal_connect(
+        drag,
+        "drag-end",
+        G_CALLBACK(on_drag_end),
+        pa
+    );
+
+    gtk_widget_add_controller(
+        pa->gl_area,
+        GTK_EVENT_CONTROLLER(drag)
+    );
+
+
+    /* --------------------------------------------------------
      * COLOCA O OVERLAY NA JANELA
      * -------------------------------------------------------- */
 
@@ -1528,6 +1994,28 @@ static void on_activate(
     fprintf(stderr,
             "[gtk] controlador de teclado instalado na WINDOW\n");
 
+    /* --------------------------------------------------------
+     * SCROLL_CONTROLLER
+     * -------------------------------------------------------- */
+
+    GtkEventControllerScroll *scroll_controller =
+        GTK_EVENT_CONTROLLER_SCROLL(
+            gtk_event_controller_scroll_new(
+                GTK_EVENT_CONTROLLER_SCROLL_BOTH_AXES
+            )
+        );
+
+    g_signal_connect(
+        scroll_controller,
+        "scroll",
+        G_CALLBACK(on_scroll),
+        pa
+    );
+
+    gtk_widget_add_controller(
+        pa->gl_area,
+        GTK_EVENT_CONTROLLER(scroll_controller)
+    );
 
     /* --------------------------------------------------------
      * SIGNALS
@@ -1632,6 +2120,10 @@ int main(int argc, char **argv)
             setlocale(LC_NUMERIC, NULL));
 
     PlayerApp pa = {0};
+
+    pa.video_zoom = 0.0;
+    pa.video_pan_x = 0.0;
+    pa.video_pan_y = 0.0;
 
     if (argc > 1) {
         pa.filename = argv[1];

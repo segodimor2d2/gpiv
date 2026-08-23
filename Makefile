@@ -3,7 +3,7 @@ CC = gcc
 PKGS = gtk4 mpv epoxy
 
 CFLAGS = -Wall -Wextra -g $(shell pkg-config --cflags $(PKGS))
-LDLIBS = $(shell pkg-config --libs $(PKGS)) -lGL
+LDLIBS = $(shell pkg-config --libs $(PKGS)) -lGL -lm
 
 SRC = src/main.c
 BIN = gpiv
