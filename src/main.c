@@ -17,6 +17,7 @@ typedef struct {
     const char *filename;
     guint mpv_event_source;
     int video_rotation;
+    int brightness;
 } PlayerApp;
 
 /* Protótipos */
@@ -72,6 +73,71 @@ static void copy_video_path(PlayerApp *pa)
         2000,
         restore_info_label,
         pa
+    );
+}
+
+/* ============================================================
+* MPV_SET_BRIGHTNESS
+* ============================================================ */
+
+
+static void mpv_set_brightness(PlayerApp *pa, int value)
+{
+    if (!pa->mpv)
+        return;
+
+    if (value > 100)
+        value = 100;
+
+    if (value < -100)
+        value = -100;
+
+    pa->brightness = value;
+
+    char brightness[16];
+
+    snprintf(
+        brightness,
+        sizeof(brightness),
+        "%d",
+        pa->brightness
+    );
+
+    const char *command[] = {
+        "set",
+        "brightness",
+        brightness,
+        NULL
+    };
+
+    fprintf(stderr,
+            "[BRIGHTNESS] %d\n",
+            pa->brightness);
+
+    int status = mpv_command(
+        pa->mpv,
+        command
+    );
+
+    if (status < 0) {
+
+        fprintf(stderr,
+                "[BRIGHTNESS] ERRO: %s\n",
+                mpv_error_string(status));
+
+    } else {
+
+        fprintf(stderr,
+                "[BRIGHTNESS] OK -> %d\n",
+                pa->brightness);
+    }
+}
+
+static void mpv_change_brightness(PlayerApp *pa, int amount)
+{
+    mpv_set_brightness(
+        pa,
+        pa->brightness + amount
     );
 }
 
@@ -616,6 +682,38 @@ static gboolean on_key_pressed(
 
         return TRUE;
     }
+
+    /* --------------------------------------------------------
+     * U -> aumentar brilho
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_u ||
+        keyval == GDK_KEY_U) {
+
+        fprintf(stderr,
+                "[KEY] U -> aumentar brightness\n");
+
+        mpv_change_brightness(pa, 5);
+
+        return TRUE;
+    }
+
+
+    /* --------------------------------------------------------
+     * I -> diminuir brilho
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_i ||
+        keyval == GDK_KEY_I) {
+
+        fprintf(stderr,
+                "[KEY] I -> diminuir brightness\n");
+
+        mpv_change_brightness(pa, -5);
+
+        return TRUE;
+    }
+
 
     /* --------------------------------------------------------
      * fim
