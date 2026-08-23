@@ -103,75 +103,14 @@ static gboolean on_scroll(
         return FALSE;
 
     /*
-     * Posição do mouse dentro do GtkGLArea.
-     */
-    double mouse_x;
-    double mouse_y;
-
-    GdkDevice *device =
-        gtk_event_controller_get_current_event_device(
-            GTK_EVENT_CONTROLLER(controller));
-
-    GdkSurface *surface =
-        gtk_native_get_surface(
-            gtk_widget_get_native(pa->gl_area));
-
-    if (!device || !surface)
-        return FALSE;
-
-    GdkDisplay *display =
-        gtk_widget_get_display(pa->gl_area);
-
-    GdkSeat *seat =
-        gdk_display_get_default_seat(display);
-
-    GdkDevice *pointer =
-        gdk_seat_get_pointer(seat);
-
-    if (!pointer)
-        return FALSE;
-
-    double surface_x;
-    double surface_y;
-
-    gdk_surface_get_device_position(
-        surface,
-        pointer,
-        &surface_x,
-        &surface_y,
-        NULL
-    );
-
-    mouse_x = surface_x;
-    mouse_y = surface_y;
-
-    int width =
-        gtk_widget_get_width(pa->gl_area);
-
-    int height =
-        gtk_widget_get_height(pa->gl_area);
-
-    if (width <= 0 || height <= 0)
-        return FALSE;
-
-    /*
-     * Normaliza o mouse:
+     * Scroll:
      *
-     * -1 = esquerda / cima
-     *  0 = centro
-     * +1 = direita / baixo
+     * para cima   -> zoom in
+     * para baixo  -> zoom out
+     *
+     * IMPORTANTE:
+     * o scroll NÃO altera o pan.
      */
-    double mx =
-        (mouse_x / width) * 2.0 - 1.0;
-
-    double my =
-        (mouse_y / height) * 2.0 - 1.0;
-
-    /*
-     * Scroll para cima -> zoom in
-     * Scroll para baixo -> zoom out
-     */
-    double old_zoom = pa->video_zoom;
 
     if (dy < 0)
         pa->video_zoom += 0.25;
@@ -179,58 +118,16 @@ static gboolean on_scroll(
         pa->video_zoom -= 0.25;
 
     /*
-     * Limites.
+     * Limites do zoom.
      */
     if (pa->video_zoom > 5.0)
         pa->video_zoom = 5.0;
 
-    if (pa->video_zoom < -5.0)
-        pa->video_zoom = -5.0;
+    if (pa->video_zoom < 0.0)
+        pa->video_zoom = 0.0;
 
     /*
-     * Fator de escala antes/depois.
-     *
-     * video-zoom usa:
-     *
-     *     escala = 2 ^ zoom
-     */
-    double old_scale = pow(2.0, old_zoom);
-    double new_scale = pow(2.0, pa->video_zoom);
-
-    /*
-     * Mantém o ponto sob o mouse.
-     *
-     * O pan é relativo ao tamanho do vídeo escalado.
-     */
-    if (new_scale > 0.0) {
-
-        double delta_scale =
-            (new_scale - old_scale) / new_scale;
-
-        pa->video_pan_x +=
-            mx * delta_scale;
-
-        pa->video_pan_y +=
-            my * delta_scale;
-    }
-
-    /*
-     * Limita o pan.
-     */
-    if (pa->video_pan_x > 1.0)
-        pa->video_pan_x = 1.0;
-
-    if (pa->video_pan_x < -1.0)
-        pa->video_pan_x = -1.0;
-
-    if (pa->video_pan_y > 1.0)
-        pa->video_pan_y = 1.0;
-
-    if (pa->video_pan_y < -1.0)
-        pa->video_pan_y = -1.0;
-
-    /*
-     * Envia zoom.
+     * Envia zoom para o mpv.
      */
     char zoom[64];
 
@@ -248,64 +145,22 @@ static gboolean on_scroll(
         NULL
     };
 
-    mpv_command(
+    int status = mpv_command(
         pa->mpv,
         zoom_cmd
     );
 
-    /*
-     * Envia pan X.
-     */
-    char pan_x[64];
-
-    snprintf(
-        pan_x,
-        sizeof(pan_x),
-        "%.6f",
-        pa->video_pan_x
-    );
-
-    const char *pan_x_cmd[] = {
-        "set",
-        "video-pan-x",
-        pan_x,
-        NULL
-    };
-
-    mpv_command(
-        pa->mpv,
-        pan_x_cmd
-    );
-
-    /*
-     * Envia pan Y.
-     */
-    char pan_y[64];
-
-    snprintf(
-        pan_y,
-        sizeof(pan_y),
-        "%.6f",
-        pa->video_pan_y
-    );
-
-    const char *pan_y_cmd[] = {
-        "set",
-        "video-pan-y",
-        pan_y,
-        NULL
-    };
-
-    mpv_command(
-        pa->mpv,
-        pan_y_cmd
-    );
+    if (status < 0) {
+        fprintf(
+            stderr,
+            "[ZOOM] ERRO: %s\n",
+            mpv_error_string(status)
+        );
+    }
 
     fprintf(
         stderr,
-        "[ZOOM] mouse=%.2f,%.2f zoom=%.3f pan=%.3f,%.3f\n",
-        mx,
-        my,
+        "[ZOOM] zoom=%.3f pan=%.3f,%.3f\n",
         pa->video_zoom,
         pa->video_pan_x,
         pa->video_pan_y
