@@ -1,12 +1,12 @@
 #include "app.h"
-#include "render.h"
 #include "player.h"
+#include "render.h"
+#include "ui.h"
 
 #include <gtk/gtk.h>
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 
 /* ============================================================
@@ -31,6 +31,7 @@ static gboolean restore_info_label(
     gpointer data)
 {
     PlayerApp *pa = data;
+
 
     if (!pa ||
         !pa->info_label)
@@ -136,47 +137,6 @@ static void copy_video_path(
 
 
 /* ============================================================
- * CSS
- * ============================================================ */
-
-static void setup_info_label_css(void)
-{
-    GtkCssProvider *provider =
-        gtk_css_provider_new();
-
-
-    gtk_css_provider_load_from_string(
-        provider,
-        ".video-info {"
-        "  font-size: 12px;"
-        "  color: white;"
-        "  background-color: rgba(0, 0, 0, 0.3);"
-        "  padding: 5px 8px;"
-        "}"
-    );
-
-
-    GdkDisplay *display =
-        gdk_display_get_default();
-
-
-    if (display) {
-
-        gtk_style_context_add_provider_for_display(
-            display,
-            GTK_STYLE_PROVIDER(provider),
-            GTK_STYLE_PROVIDER_PRIORITY_APPLICATION
-        );
-    }
-
-
-    g_object_unref(
-        provider
-    );
-}
-
-
-/* ============================================================
  * KEYBOARD
  * ============================================================ */
 
@@ -203,10 +163,6 @@ static gboolean on_key_pressed(
     );
 
 
-    /* --------------------------------------------------------
-     * PLAYER
-     * -------------------------------------------------------- */
-
     Player *player = NULL;
 
 
@@ -220,7 +176,7 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * Q -> SAIR
+     * Q
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_q ||
@@ -245,17 +201,13 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * SPACE -> PAUSE / PLAY
+     * SPACE
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_space) {
 
-        if (player) {
-
-            player_toggle_pause(
-                player
-            );
-        }
+        if (player)
+            player_toggle_pause(player);
 
 
         return TRUE;
@@ -263,18 +215,14 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * K -> FRAME ANTERIOR
+     * K
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_k ||
         keyval == GDK_KEY_K) {
 
-        if (player) {
-
-            player_frame_back(
-                player
-            );
-        }
+        if (player)
+            player_frame_back(player);
 
 
         return TRUE;
@@ -282,18 +230,14 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * J -> PRÓXIMO FRAME
+     * J
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_j ||
         keyval == GDK_KEY_J) {
 
-        if (player) {
-
-            player_frame_forward(
-                player
-            );
-        }
+        if (player)
+            player_frame_forward(player);
 
 
         return TRUE;
@@ -301,18 +245,14 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * S -> SCREENSHOT
+     * S
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_s ||
         keyval == GDK_KEY_S) {
 
-        if (player) {
-
-            player_save_frame(
-                player
-            );
-        }
+        if (player)
+            player_save_frame(player);
 
 
         return TRUE;
@@ -320,34 +260,27 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * Y -> COPIAR PATH
+     * Y
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_y ||
         keyval == GDK_KEY_Y) {
 
-        copy_video_path(
-            pa
-        );
-
+        copy_video_path(pa);
 
         return TRUE;
     }
 
 
     /* --------------------------------------------------------
-     * R -> ROTATE
+     * R
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_r ||
         keyval == GDK_KEY_R) {
 
-        if (player) {
-
-            player_rotate(
-                player
-            );
-        }
+        if (player)
+            player_rotate(player);
 
 
         return TRUE;
@@ -355,19 +288,17 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * U -> BRIGHTNESS +
+     * U
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_u ||
         keyval == GDK_KEY_U) {
 
-        if (player) {
-
+        if (player)
             player_change_brightness(
                 player,
                 5
             );
-        }
 
 
         return TRUE;
@@ -375,19 +306,17 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * I -> BRIGHTNESS -
+     * I
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_i ||
         keyval == GDK_KEY_I) {
 
-        if (player) {
-
+        if (player)
             player_change_brightness(
                 player,
                 -5
             );
-        }
 
 
         return TRUE;
@@ -395,17 +324,13 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * 0 -> RESET ZOOM / PAN
+     * 0
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_0) {
 
-        if (player) {
-
-            player_reset_view(
-                player
-            );
-        }
+        if (player)
+            player_reset_view(player);
 
 
         return TRUE;
@@ -449,9 +374,7 @@ static gboolean grab_gl_focus(
     fprintf(
         stderr,
         "[gtk] foco GtkGLArea = %d\n",
-        gtk_widget_has_focus(
-            gl_area
-        )
+        gtk_widget_has_focus(gl_area)
     );
 
 
@@ -697,29 +620,6 @@ static void on_activate(
 
 
     /* --------------------------------------------------------
-     * WINDOW
-     * -------------------------------------------------------- */
-
-    pa->window =
-        gtk_application_window_new(
-            app
-        );
-
-
-    gtk_window_set_title(
-        GTK_WINDOW(pa->window),
-        "GtkGLArea TEST"
-    );
-
-
-    gtk_window_set_default_size(
-        GTK_WINDOW(pa->window),
-        960,
-        540
-    );
-
-
-    /* --------------------------------------------------------
      * RENDER
      * -------------------------------------------------------- */
 
@@ -733,30 +633,31 @@ static void on_activate(
 
         fprintf(
             stderr,
-            "[RENDER] ERRO: não foi possível criar Render\n"
+            "[RENDER] ERRO criando Render\n"
         );
-
-
-        gtk_window_destroy(
-            GTK_WINDOW(pa->window)
-        );
-
 
         return;
     }
 
 
-    GtkWidget *gl_area =
-        render_get_widget(
-            pa->render
+    /* --------------------------------------------------------
+     * UI
+     * -------------------------------------------------------- */
+
+    pa->window =
+        ui_create_window(
+            app,
+            pa->render,
+            pa->filename,
+            &pa->info_label
         );
 
 
-    if (!gl_area) {
+    if (!pa->window) {
 
         fprintf(
             stderr,
-            "[RENDER] ERRO: GtkGLArea NULL\n"
+            "[UI] ERRO criando interface\n"
         );
 
 
@@ -768,90 +669,30 @@ static void on_activate(
         pa->render = NULL;
 
 
-        gtk_window_destroy(
-            GTK_WINDOW(pa->window)
-        );
-
-
         return;
     }
 
 
     /* --------------------------------------------------------
-     * OVERLAY
+     * GL AREA
      * -------------------------------------------------------- */
 
-    GtkWidget *overlay =
-        gtk_overlay_new();
-
-
-    gtk_overlay_set_child(
-        GTK_OVERLAY(overlay),
-        gl_area
-    );
-
-
-    /* --------------------------------------------------------
-     * INFO LABEL
-     * -------------------------------------------------------- */
-
-    setup_info_label_css();
-
-
-    pa->info_label =
-        gtk_label_new(NULL);
-
-
-    gtk_widget_add_css_class(
-        pa->info_label,
-        "video-info"
-    );
-
-
-    if (pa->filename) {
-
-        gtk_label_set_text(
-            GTK_LABEL(pa->info_label),
-            pa->filename
+    GtkWidget *gl_area =
+        render_get_widget(
+            pa->render
         );
 
-    } else {
 
-        gtk_label_set_text(
-            GTK_LABEL(pa->info_label),
-            ""
+    if (!gl_area) {
+
+        fprintf(
+            stderr,
+            "[RENDER] GtkGLArea NULL\n"
         );
+
+
+        return;
     }
-
-
-    gtk_widget_set_halign(
-        pa->info_label,
-        GTK_ALIGN_END
-    );
-
-
-    gtk_widget_set_valign(
-        pa->info_label,
-        GTK_ALIGN_END
-    );
-
-
-    gtk_widget_set_margin_end(
-        pa->info_label,
-        15
-    );
-
-
-    gtk_widget_set_margin_bottom(
-        pa->info_label,
-        15
-    );
-
-
-    gtk_overlay_add_overlay(
-        GTK_OVERLAY(overlay),
-        pa->info_label
-    );
 
 
     /* --------------------------------------------------------
@@ -977,17 +818,7 @@ static void on_activate(
 
 
     /* --------------------------------------------------------
-     * WINDOW CHILD
-     * -------------------------------------------------------- */
-
-    gtk_window_set_child(
-        GTK_WINDOW(pa->window),
-        overlay
-    );
-
-
-    /* --------------------------------------------------------
-     * MOSTRA WINDOW
+     * MOSTRA
      * -------------------------------------------------------- */
 
     gtk_window_present(
@@ -1063,11 +894,6 @@ int player_app_run(
     );
 
 
-    /*
-     * Não entregar os argumentos do vídeo
-     * para o GApplication.
-     */
-
     int gtk_argc = 1;
 
 
@@ -1110,11 +936,6 @@ void player_app_free(
     if (!pa)
         return;
 
-
-    /*
-     * O Render é o dono do Player e do
-     * mpv_render_context.
-     */
 
     if (pa->render) {
 

@@ -9,7 +9,8 @@ SRC = \
 	src/main.c \
 	src/app.c \
 	src/player.c \
-	src/render.c
+	src/render.c \
+	src/ui.c
 
 BIN = gpiv
 
