@@ -16,6 +16,7 @@ typedef struct {
     mpv_render_context *mpv_render;
     const char *filename;
     guint mpv_event_source;
+    int video_rotation;
 } PlayerApp;
 
 /* Protótipos */
@@ -418,6 +419,56 @@ static void mpv_save_frame(PlayerApp *pa)
 
 
 /* ============================================================
+* MPV_ROTATE_VIDEO
+* ============================================================ */
+
+static void mpv_rotate_video(PlayerApp *pa)
+{
+    if (!pa->mpv)
+        return;
+
+    pa->video_rotation += 90;
+
+    if (pa->video_rotation >= 360)
+        pa->video_rotation = 0;
+
+    char rotation[16];
+
+    snprintf(
+        rotation,
+        sizeof(rotation),
+        "%d",
+        pa->video_rotation
+    );
+
+    fprintf(stderr,
+            "[ROTATE] video-rotate=%s\n",
+            rotation);
+
+    const char *command[] = {
+        "set",
+        "video-rotate",
+        rotation,
+        NULL
+    };
+
+    int status = mpv_command(
+        pa->mpv,
+        command
+    );
+
+    if (status < 0) {
+        fprintf(stderr,
+                "[ROTATE] ERRO: %s\n",
+                mpv_error_string(status));
+    } else {
+        fprintf(stderr,
+                "[ROTATE] OK -> %d graus\n",
+                pa->video_rotation);
+    }
+}
+
+/* ============================================================
  * MPV - pause/play
  * ============================================================ */
 
@@ -546,6 +597,22 @@ static gboolean on_key_pressed(
                 "[KEY] Y -> copiar path\n");
 
         copy_video_path(pa);
+
+        return TRUE;
+    }
+
+    /* --------------------------------------------------------
+     * R -> rotacionar vídeo 90 graus
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_r ||
+        keyval == GDK_KEY_R) {
+
+
+        fprintf(stderr,
+                "[KEY] R -> rotacionar vídeo\n");
+
+        mpv_rotate_video(pa);
 
         return TRUE;
     }
