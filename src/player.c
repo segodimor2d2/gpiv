@@ -1,8 +1,5 @@
 #include "player.h"
 
-#include <epoxy/gl.h>
-#include <GL/glx.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <locale.h>
@@ -17,8 +14,6 @@
 struct _Player {
 
     mpv_handle *mpv;
-
-    mpv_render_context *mpv_render;
 
     const char *filename;
 
@@ -39,22 +34,6 @@ struct _Player {
 
 
 /* ============================================================
- * OPENGL
- * ============================================================ */
-
-static void *mpv_get_proc_address(
-    void *ctx,
-    const char *name)
-{
-    (void)ctx;
-
-    return (void *)glXGetProcAddressARB(
-        (const GLubyte *)name
-    );
-}
-
-
-/* ============================================================
  * CRIAÇÃO
  * ============================================================ */
 
@@ -70,7 +49,6 @@ Player *player_new(void)
         return NULL;
 
     player->mpv = NULL;
-    player->mpv_render = NULL;
 
     player->filename = NULL;
 
@@ -97,9 +75,7 @@ Player *player_new(void)
 
 int player_initialize(
     Player *player,
-    const char *filename,
-    mpv_render_update_fn update_callback,
-    void *update_callback_ctx)
+    const char *filename)
 {
     if (!player)
         return -1;
@@ -191,9 +167,9 @@ int player_initialize(
         goto error;
 
 
-    /*
-     * mpv_initialize()
-     */
+    /* --------------------------------------------------------
+     * MPV INITIALIZE
+     * -------------------------------------------------------- */
 
     status =
         mpv_initialize(
@@ -208,82 +184,6 @@ int player_initialize(
         stderr,
         "[MPV] mpv_initialize() OK\n"
     );
-
-
-    /* --------------------------------------------------------
-     * RENDER CONTEXT
-     * -------------------------------------------------------- */
-
-    mpv_opengl_init_params gl_init_params = {
-
-        .get_proc_address =
-            mpv_get_proc_address,
-
-        .get_proc_address_ctx =
-            NULL
-    };
-
-
-    mpv_render_param params[] = {
-
-        {
-            MPV_RENDER_PARAM_API_TYPE,
-            MPV_RENDER_API_TYPE_OPENGL
-        },
-
-        {
-            MPV_RENDER_PARAM_OPENGL_INIT_PARAMS,
-            &gl_init_params
-        },
-
-        {
-            MPV_RENDER_PARAM_INVALID,
-            NULL
-        }
-    };
-
-
-    status =
-        mpv_render_context_create(
-            &player->mpv_render,
-            player->mpv,
-            params
-        );
-
-
-    if (status < 0) {
-
-        fprintf(
-            stderr,
-            "[MPV-RENDER] ERRO criando contexto: %s\n",
-            mpv_error_string(status)
-        );
-
-        player->mpv_render = NULL;
-
-        goto error;
-    }
-
-
-    fprintf(
-        stderr,
-        "[MPV-RENDER] contexto criado: %p\n",
-        (void *)player->mpv_render
-    );
-
-
-    /* --------------------------------------------------------
-     * CALLBACK DE UPDATE
-     * -------------------------------------------------------- */
-
-    if (update_callback) {
-
-        mpv_render_context_set_update_callback(
-            player->mpv_render,
-            update_callback,
-            update_callback_ctx
-        );
-    }
 
 
     /* --------------------------------------------------------
@@ -315,16 +215,6 @@ int player_initialize(
 
 error:
 
-    if (player->mpv_render) {
-
-        mpv_render_context_free(
-            player->mpv_render
-        );
-
-        player->mpv_render = NULL;
-    }
-
-
     if (player->mpv) {
 
         mpv_terminate_destroy(
@@ -340,17 +230,16 @@ error:
 
 
 /* ============================================================
- * RENDER CONTEXT
+ * MPV HANDLE
  * ============================================================ */
 
-mpv_render_context *
-player_get_render_context(
+mpv_handle *player_get_mpv(
     Player *player)
 {
     if (!player)
         return NULL;
 
-    return player->mpv_render;
+    return player->mpv;
 }
 
 
@@ -1031,15 +920,12 @@ void player_free(
         return;
 
 
-    if (player->mpv_render) {
-
-        mpv_render_context_free(
-            player->mpv_render
-        );
-
-        player->mpv_render = NULL;
-    }
-
+    /*
+     * O mpv_render_context NÃO pertence mais
+     * ao Player.
+     *
+     * Ele é destruído pelo Render.
+     */
 
     if (player->mpv) {
 

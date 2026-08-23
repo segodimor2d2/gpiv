@@ -1,17 +1,12 @@
 #include "app.h"
+#include "render.h"
 #include "player.h"
 
 #include <gtk/gtk.h>
-#include <epoxy/gl.h>
-#include <GL/glx.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <locale.h>
-
-#include <mpv/client.h>
-#include <mpv/render_gl.h>
 
 
 /* ============================================================
@@ -32,13 +27,15 @@ static gboolean restore_info_label(
  * INFO LABEL
  * ============================================================ */
 
-static gboolean restore_info_label(gpointer data)
+static gboolean restore_info_label(
+    gpointer data)
 {
     PlayerApp *pa = data;
 
     if (!pa ||
         !pa->info_label)
         return G_SOURCE_REMOVE;
+
 
     if (pa->filename) {
 
@@ -54,6 +51,7 @@ static gboolean restore_info_label(gpointer data)
             ""
         );
     }
+
 
     return G_SOURCE_REMOVE;
 }
@@ -71,7 +69,9 @@ static void show_clipboard_message(
         !pa->filename)
         return;
 
+
     char message[8192];
+
 
     snprintf(
         message,
@@ -79,6 +79,7 @@ static void show_clipboard_message(
         "%s\nPath copiado",
         pa->filename
     );
+
 
     gtk_label_set_text(
         GTK_LABEL(pa->info_label),
@@ -95,20 +96,24 @@ static void copy_video_path(
         !pa->window)
         return;
 
+
     GdkDisplay *display =
         gtk_widget_get_display(
             pa->window
         );
+
 
     GdkClipboard *clipboard =
         gdk_display_get_clipboard(
             display
         );
 
+
     gdk_clipboard_set_text(
         clipboard,
         pa->filename
     );
+
 
     fprintf(
         stderr,
@@ -116,7 +121,11 @@ static void copy_video_path(
         pa->filename
     );
 
-    show_clipboard_message(pa);
+
+    show_clipboard_message(
+        pa
+    );
+
 
     g_timeout_add(
         2000,
@@ -135,6 +144,7 @@ static void setup_info_label_css(void)
     GtkCssProvider *provider =
         gtk_css_provider_new();
 
+
     gtk_css_provider_load_from_string(
         provider,
         ".video-info {"
@@ -145,8 +155,10 @@ static void setup_info_label_css(void)
         "}"
     );
 
+
     GdkDisplay *display =
         gdk_display_get_default();
+
 
     if (display) {
 
@@ -157,7 +169,10 @@ static void setup_info_label_css(void)
         );
     }
 
-    g_object_unref(provider);
+
+    g_object_unref(
+        provider
+    );
 }
 
 
@@ -176,14 +191,32 @@ static gboolean on_key_pressed(
     (void)keycode;
     (void)state;
 
+
     if (!pa)
         return FALSE;
+
 
     fprintf(
         stderr,
         "[KEY] keyval=0x%x\n",
         keyval
     );
+
+
+    /* --------------------------------------------------------
+     * PLAYER
+     * -------------------------------------------------------- */
+
+    Player *player = NULL;
+
+
+    if (pa->render) {
+
+        player =
+            render_get_player(
+                pa->render
+            );
+    }
 
 
     /* --------------------------------------------------------
@@ -198,12 +231,14 @@ static gboolean on_key_pressed(
             "[KEY] Q DETECTADO -> saindo\n"
         );
 
+
         if (pa->window) {
 
             gtk_window_destroy(
                 GTK_WINDOW(pa->window)
             );
         }
+
 
         return TRUE;
     }
@@ -215,12 +250,13 @@ static gboolean on_key_pressed(
 
     if (keyval == GDK_KEY_space) {
 
-        if (pa->player) {
+        if (player) {
 
             player_toggle_pause(
-                pa->player
+                player
             );
         }
+
 
         return TRUE;
     }
@@ -233,12 +269,13 @@ static gboolean on_key_pressed(
     if (keyval == GDK_KEY_k ||
         keyval == GDK_KEY_K) {
 
-        if (pa->player) {
+        if (player) {
 
             player_frame_back(
-                pa->player
+                player
             );
         }
+
 
         return TRUE;
     }
@@ -251,12 +288,13 @@ static gboolean on_key_pressed(
     if (keyval == GDK_KEY_j ||
         keyval == GDK_KEY_J) {
 
-        if (pa->player) {
+        if (player) {
 
             player_frame_forward(
-                pa->player
+                player
             );
         }
+
 
         return TRUE;
     }
@@ -269,12 +307,13 @@ static gboolean on_key_pressed(
     if (keyval == GDK_KEY_s ||
         keyval == GDK_KEY_S) {
 
-        if (pa->player) {
+        if (player) {
 
             player_save_frame(
-                pa->player
+                player
             );
         }
+
 
         return TRUE;
     }
@@ -287,7 +326,10 @@ static gboolean on_key_pressed(
     if (keyval == GDK_KEY_y ||
         keyval == GDK_KEY_Y) {
 
-        copy_video_path(pa);
+        copy_video_path(
+            pa
+        );
+
 
         return TRUE;
     }
@@ -300,12 +342,13 @@ static gboolean on_key_pressed(
     if (keyval == GDK_KEY_r ||
         keyval == GDK_KEY_R) {
 
-        if (pa->player) {
+        if (player) {
 
             player_rotate(
-                pa->player
+                player
             );
         }
+
 
         return TRUE;
     }
@@ -318,13 +361,14 @@ static gboolean on_key_pressed(
     if (keyval == GDK_KEY_u ||
         keyval == GDK_KEY_U) {
 
-        if (pa->player) {
+        if (player) {
 
             player_change_brightness(
-                pa->player,
+                player,
                 5
             );
         }
+
 
         return TRUE;
     }
@@ -337,13 +381,14 @@ static gboolean on_key_pressed(
     if (keyval == GDK_KEY_i ||
         keyval == GDK_KEY_I) {
 
-        if (pa->player) {
+        if (player) {
 
             player_change_brightness(
-                pa->player,
+                player,
                 -5
             );
         }
+
 
         return TRUE;
     }
@@ -355,12 +400,13 @@ static gboolean on_key_pressed(
 
     if (keyval == GDK_KEY_0) {
 
-        if (pa->player) {
+        if (player) {
 
             player_reset_view(
-                pa->player
+                player
             );
         }
+
 
         return TRUE;
     }
@@ -371,407 +417,208 @@ static gboolean on_key_pressed(
 
 
 /* ============================================================
- * MPV -> GTK RENDER
+ * FOCUS
  * ============================================================ */
 
-static gboolean mpv_queue_render_idle(
+static gboolean grab_gl_focus(
     gpointer data)
 {
     PlayerApp *pa = data;
 
+
     if (!pa ||
-        !pa->gl_area)
+        !pa->render)
         return G_SOURCE_REMOVE;
 
-    gtk_gl_area_queue_render(
-        GTK_GL_AREA(pa->gl_area)
+
+    GtkWidget *gl_area =
+        render_get_widget(
+            pa->render
+        );
+
+
+    if (!gl_area)
+        return G_SOURCE_REMOVE;
+
+
+    gtk_widget_grab_focus(
+        gl_area
     );
+
+
+    fprintf(
+        stderr,
+        "[gtk] foco GtkGLArea = %d\n",
+        gtk_widget_has_focus(
+            gl_area
+        )
+    );
+
 
     return G_SOURCE_REMOVE;
 }
 
 
-static void on_mpv_update(
-    void *ctx)
-{
-    PlayerApp *pa = ctx;
-
-    if (!pa)
-        return;
-
-    g_main_context_invoke(
-        NULL,
-        mpv_queue_render_idle,
-        pa
-    );
-}
-
 /* ============================================================
- * GtkGLArea REALIZE
+ * ZOOM
  * ============================================================ */
 
-static void on_gl_realize(
-    GtkGLArea *area,
+static gboolean on_scroll(
+    GtkEventControllerScroll *controller,
+    double dx,
+    double dy,
     PlayerApp *pa)
 {
-    fprintf(
-        stderr,
-        "[GL] REALIZE GtkGLArea\n"
-    );
+    (void)controller;
+    (void)dx;
 
-    gtk_gl_area_make_current(area);
-
-    GError *error =
-        gtk_gl_area_get_error(area);
-
-    if (error != NULL) {
-
-        fprintf(
-            stderr,
-            "[GL] ERRO ao criar contexto OpenGL: %s\n",
-            error->message
-        );
-
-        return;
-    }
-
-    GdkGLContext *ctx =
-        gtk_gl_area_get_context(area);
-
-    if (!ctx) {
-
-        fprintf(
-            stderr,
-            "[GL] contexto NULL\n"
-        );
-
-        return;
-    }
-
-    fprintf(
-        stderr,
-        "[GL] contexto OpenGL criado\n"
-    );
-
-    fprintf(
-        stderr,
-        "[GL] vendor   = %s\n",
-        glGetString(GL_VENDOR)
-    );
-
-    fprintf(
-        stderr,
-        "[GL] renderer = %s\n",
-        glGetString(GL_RENDERER)
-    );
-
-    fprintf(
-        stderr,
-        "[GL] version  = %s\n",
-        glGetString(GL_VERSION)
-    );
-
-
-    /* --------------------------------------------------------
-     * LC_NUMERIC
-     * -------------------------------------------------------- */
-
-    fprintf(
-        stderr,
-        "[MPV] LC_NUMERIC antes = %s\n",
-        setlocale(
-            LC_NUMERIC,
-            NULL
-        )
-    );
-
-    if (setlocale(
-            LC_NUMERIC,
-            "C") == NULL) {
-
-        fprintf(
-            stderr,
-            "[MPV] ERRO: não foi possível definir "
-            "LC_NUMERIC=C\n"
-        );
-
-        return;
-    }
-
-    fprintf(
-        stderr,
-        "[MPV] LC_NUMERIC depois = %s\n",
-        setlocale(
-            LC_NUMERIC,
-            NULL
-        )
-    );
-
-
-    /* --------------------------------------------------------
-     * CRIA PLAYER
-     * -------------------------------------------------------- */
-
-    pa->player =
-        player_new();
-
-    if (!pa->player) {
-
-        fprintf(
-            stderr,
-            "[PLAYER] ERRO: não foi possível criar Player\n"
-        );
-
-        return;
-    }
-
-
-    /* --------------------------------------------------------
-     * CONFIGURA MPV
-     * -------------------------------------------------------- */
-
-    int status = player_initialize(
-        pa->player,
-        pa->filename,
-        on_mpv_update,
-        pa
-    );
-
-    if (status < 0) {
-
-        fprintf(
-            stderr,
-            "[PLAYER] ERRO ao inicializar player: %s\n",
-            mpv_error_string(status)
-        );
-
-        player_free(
-            pa->player
-        );
-
-        pa->player = NULL;
-
-        return;
-    }
-
-    fprintf(
-        stderr,
-        "[PLAYER] inicializado com sucesso\n"
-    );
-
-    gtk_gl_area_queue_render(
-        GTK_GL_AREA(pa->gl_area)
-    );
-
-}
-
-
-/* ============================================================
- * GtkGLArea UNREALIZE
- * ============================================================ */
-
-static void on_gl_unrealize(
-    GtkGLArea *area,
-    PlayerApp *pa)
-{
-    (void)area;
-
-    fprintf(
-        stderr,
-        "[GL] UNREALIZE GtkGLArea\n"
-    );
-
-    if (pa &&
-        pa->player) {
-
-        fprintf(
-            stderr,
-            "[PLAYER] destruindo player\n"
-        );
-
-        player_free(
-            pa->player
-        );
-
-        pa->player = NULL;
-    }
-}
-
-
-/* ============================================================
- * RESIZE
- * ============================================================ */
-
-static void on_gl_resize(
-    GtkGLArea *area,
-    int width,
-    int height,
-    PlayerApp *pa)
-{
-    (void)area;
-    (void)pa;
-
-    fprintf(
-        stderr,
-        "[gtk-resize] size=%dx%d\n",
-        width,
-        height
-    );
-}
-
-
-/* ============================================================
- * RENDER
- * ============================================================ */
-
-static gboolean on_gl_render(
-    GtkGLArea *area,
-    GdkGLContext *ctx,
-    PlayerApp *pa)
-{
-    (void)ctx;
-
-    fprintf(
-        stderr,
-        "[GL] RENDER\n"
-    );
-
-    int width =
-        gtk_widget_get_width(
-            GTK_WIDGET(area)
-        );
-
-    int height =
-        gtk_widget_get_height(
-            GTK_WIDGET(area)
-        );
-
-    if (width <= 0 ||
-        height <= 0)
-        return TRUE;
-
-
-    /* --------------------------------------------------------
-     * PLAYER AINDA NÃO DISPONÍVEL
-     * -------------------------------------------------------- */
 
     if (!pa ||
-        !pa->player ||
-        !player_get_render_context(pa->player)) {
-
-        glClearColor(
-            0.2f,
-            0.2f,
-            0.2f,
-            1.0f
-        );
-
-        glClear(
-            GL_COLOR_BUFFER_BIT
-        );
-
-        return TRUE;
-    }
+        !pa->render)
+        return FALSE;
 
 
-    /* --------------------------------------------------------
-     * VIEWPORT
-     * -------------------------------------------------------- */
-
-    glViewport(
-        0,
-        0,
-        width,
-        height
-    );
-
-
-    /* --------------------------------------------------------
-     * FBO DO GTK
-     * -------------------------------------------------------- */
-
-    GLint current_fbo = 0;
-
-    glGetIntegerv(
-        GL_DRAW_FRAMEBUFFER_BINDING,
-        &current_fbo
-    );
-
-
-    mpv_opengl_fbo fbo = {
-
-        .fbo = current_fbo,
-        .w = width,
-        .h = height,
-        .internal_format = 0
-    };
-
-
-    /* --------------------------------------------------------
-     * FLIP Y
-     * -------------------------------------------------------- */
-
-    int flip_y = 1;
-
-
-    /* --------------------------------------------------------
-     * PARÂMETROS MPV
-     * -------------------------------------------------------- */
-
-    mpv_render_param params[] = {
-
-        {
-            MPV_RENDER_PARAM_OPENGL_FBO,
-            &fbo
-        },
-
-        {
-            MPV_RENDER_PARAM_FLIP_Y,
-            &flip_y
-        },
-
-        {
-            MPV_RENDER_PARAM_INVALID,
-            NULL
-        }
-    };
-
-
-    /* --------------------------------------------------------
-     * RENDER
-     * -------------------------------------------------------- */
-
-    int status =
-        mpv_render_context_render(
-            player_get_render_context(
-                pa->player
-            ),
-            params
+    Player *player =
+        render_get_player(
+            pa->render
         );
 
 
-    if (status < 0) {
-
-        fprintf(
-            stderr,
-            "[MPV-RENDER] ERRO: %s\n",
-            mpv_error_string(status)
-        );
-    }
+    if (!player)
+        return FALSE;
 
 
-    /* --------------------------------------------------------
-     * REPORT SWAP
-     * -------------------------------------------------------- */
-
-    mpv_render_context_report_swap(
-        player_get_render_context(
-            pa->player
-        )
+    player_change_zoom(
+        player,
+        dy
     );
 
 
     return TRUE;
+}
+
+
+/* ============================================================
+ * PAN
+ * ============================================================ */
+
+static void on_drag_begin(
+    GtkGestureDrag *gesture,
+    double start_x,
+    double start_y,
+    PlayerApp *pa)
+{
+    (void)gesture;
+
+
+    if (!pa ||
+        !pa->render)
+        return;
+
+
+    Player *player =
+        render_get_player(
+            pa->render
+        );
+
+
+    if (!player)
+        return;
+
+
+    player_pan_begin(
+        player,
+        start_x,
+        start_y
+    );
+}
+
+
+static void on_drag_update(
+    GtkGestureDrag *gesture,
+    double offset_x,
+    double offset_y,
+    PlayerApp *pa)
+{
+    (void)gesture;
+
+
+    if (!pa ||
+        !pa->render)
+        return;
+
+
+    Player *player =
+        render_get_player(
+            pa->render
+        );
+
+
+    if (!player)
+        return;
+
+
+    GtkWidget *gl_area =
+        render_get_widget(
+            pa->render
+        );
+
+
+    if (!gl_area)
+        return;
+
+
+    int width =
+        gtk_widget_get_width(
+            gl_area
+        );
+
+
+    int height =
+        gtk_widget_get_height(
+            gl_area
+        );
+
+
+    player_pan_update(
+        player,
+        offset_x,
+        offset_y,
+        width,
+        height
+    );
+}
+
+
+static void on_drag_end(
+    GtkGestureDrag *gesture,
+    double offset_x,
+    double offset_y,
+    PlayerApp *pa)
+{
+    (void)gesture;
+    (void)offset_x;
+    (void)offset_y;
+
+
+    if (!pa ||
+        !pa->render)
+        return;
+
+
+    Player *player =
+        render_get_player(
+            pa->render
+        );
+
+
+    if (!player)
+        return;
+
+
+    player_pan_end(
+        player
+    );
 }
 
 
@@ -785,10 +632,12 @@ static void on_window_realize(
 {
     (void)pa;
 
+
     fprintf(
         stderr,
         "[window] REALIZE\n"
     );
+
 
     fprintf(
         stderr,
@@ -816,6 +665,7 @@ static void on_window_map(
         "[window] MAP\n"
     );
 
+
     fprintf(
         stderr,
         "[window] visible=%d mapped=%d\n",
@@ -827,143 +677,8 @@ static void on_window_map(
         )
     );
 
+
     (void)pa;
-}
-
-
-/* ============================================================
- * FOCUS
- * ============================================================ */
-
-static gboolean grab_gl_focus(
-    gpointer data)
-{
-    PlayerApp *pa = data;
-
-    if (!pa ||
-        !pa->gl_area)
-        return G_SOURCE_REMOVE;
-
-    gtk_widget_grab_focus(
-        pa->gl_area
-    );
-
-    fprintf(
-        stderr,
-        "[gtk] foco GtkGLArea = %d\n",
-        gtk_widget_has_focus(
-            pa->gl_area
-        )
-    );
-
-    return G_SOURCE_REMOVE;
-}
-
-
-/* ============================================================
- * ZOOM
- * ============================================================ */
-
-static gboolean on_scroll(
-    GtkEventControllerScroll *controller,
-    double dx,
-    double dy,
-    PlayerApp *pa)
-{
-    (void)controller;
-    (void)dx;
-
-    if (!pa ||
-        !pa->player)
-        return FALSE;
-
-    player_change_zoom(
-        pa->player,
-        dy
-    );
-
-    return TRUE;
-}
-
-
-/* ============================================================
- * PAN
- * ============================================================ */
-
-static void on_drag_begin(
-    GtkGestureDrag *gesture,
-    double start_x,
-    double start_y,
-    PlayerApp *pa)
-{
-    (void)gesture;
-
-    if (!pa ||
-        !pa->player)
-        return;
-
-    /*
-     * A API do Player agora recebe somente
-     * player + posição inicial.
-     */
-
-    player_pan_begin(
-        pa->player,
-        start_x,
-        start_y
-    );
-}
-
-
-static void on_drag_update(
-    GtkGestureDrag *gesture,
-    double offset_x,
-    double offset_y,
-    PlayerApp *pa)
-{
-    (void)gesture;
-
-    if (!pa ||
-        !pa->player)
-        return;
-
-    int width =
-        gtk_widget_get_width(
-            pa->gl_area
-        );
-
-    int height =
-        gtk_widget_get_height(
-            pa->gl_area
-        );
-
-    player_pan_update(
-        pa->player,
-        offset_x,
-        offset_y,
-        width,
-        height
-    );
-}
-
-
-static void on_drag_end(
-    GtkGestureDrag *gesture,
-    double offset_x,
-    double offset_y,
-    PlayerApp *pa)
-{
-    (void)gesture;
-    (void)offset_x;
-    (void)offset_y;
-
-    if (!pa ||
-        !pa->player)
-        return;
-
-    player_pan_end(
-        pa->player
-    );
 }
 
 
@@ -1005,35 +720,61 @@ static void on_activate(
 
 
     /* --------------------------------------------------------
-     * GL AREA
+     * RENDER
      * -------------------------------------------------------- */
 
-    pa->gl_area =
-        gtk_gl_area_new();
+    pa->render =
+        render_new(
+            pa->filename
+        );
 
 
-    gtk_gl_area_set_allowed_apis(
-        GTK_GL_AREA(pa->gl_area),
-        GDK_GL_API_GL
-    );
+    if (!pa->render) {
+
+        fprintf(
+            stderr,
+            "[RENDER] ERRO: não foi possível criar Render\n"
+        );
 
 
-    gtk_gl_area_set_required_version(
-        GTK_GL_AREA(pa->gl_area),
-        3,
-        3
-    );
+        gtk_window_destroy(
+            GTK_WINDOW(pa->window)
+        );
 
 
-    gtk_widget_set_hexpand(
-        pa->gl_area,
-        TRUE
-    );
+        return;
+    }
 
-    gtk_widget_set_vexpand(
-        pa->gl_area,
-        TRUE
-    );
+
+    GtkWidget *gl_area =
+        render_get_widget(
+            pa->render
+        );
+
+
+    if (!gl_area) {
+
+        fprintf(
+            stderr,
+            "[RENDER] ERRO: GtkGLArea NULL\n"
+        );
+
+
+        render_free(
+            pa->render
+        );
+
+
+        pa->render = NULL;
+
+
+        gtk_window_destroy(
+            GTK_WINDOW(pa->window)
+        );
+
+
+        return;
+    }
 
 
     /* --------------------------------------------------------
@@ -1046,9 +787,13 @@ static void on_activate(
 
     gtk_overlay_set_child(
         GTK_OVERLAY(overlay),
-        pa->gl_area
+        gl_area
     );
 
+
+    /* --------------------------------------------------------
+     * INFO LABEL
+     * -------------------------------------------------------- */
 
     setup_info_label_css();
 
@@ -1144,18 +889,34 @@ static void on_activate(
 
 
     gtk_widget_add_controller(
-        pa->gl_area,
+        gl_area,
         GTK_EVENT_CONTROLLER(drag)
     );
 
 
     /* --------------------------------------------------------
-     * WINDOW CHILD
+     * SCROLL
      * -------------------------------------------------------- */
 
-    gtk_window_set_child(
-        GTK_WINDOW(pa->window),
-        overlay
+    GtkEventControllerScroll *scroll_controller =
+        GTK_EVENT_CONTROLLER_SCROLL(
+            gtk_event_controller_scroll_new(
+                GTK_EVENT_CONTROLLER_SCROLL_BOTH_AXES
+            )
+        );
+
+
+    g_signal_connect(
+        scroll_controller,
+        "scroll",
+        G_CALLBACK(on_scroll),
+        pa
+    );
+
+
+    gtk_widget_add_controller(
+        gl_area,
+        GTK_EVENT_CONTROLLER(scroll_controller)
     );
 
 
@@ -1164,7 +925,7 @@ static void on_activate(
      * -------------------------------------------------------- */
 
     gtk_widget_set_focusable(
-        pa->gl_area,
+        gl_area,
         TRUE
     );
 
@@ -1196,33 +957,7 @@ static void on_activate(
 
 
     /* --------------------------------------------------------
-     * SCROLL
-     * -------------------------------------------------------- */
-
-    GtkEventControllerScroll *scroll_controller =
-        GTK_EVENT_CONTROLLER_SCROLL(
-            gtk_event_controller_scroll_new(
-                GTK_EVENT_CONTROLLER_SCROLL_BOTH_AXES
-            )
-        );
-
-
-    g_signal_connect(
-        scroll_controller,
-        "scroll",
-        G_CALLBACK(on_scroll),
-        pa
-    );
-
-
-    gtk_widget_add_controller(
-        pa->gl_area,
-        GTK_EVENT_CONTROLLER(scroll_controller)
-    );
-
-
-    /* --------------------------------------------------------
-     * SIGNALS
+     * WINDOW SIGNALS
      * -------------------------------------------------------- */
 
     g_signal_connect(
@@ -1241,45 +976,13 @@ static void on_activate(
     );
 
 
-    g_signal_connect(
-        pa->gl_area,
-        "realize",
-        G_CALLBACK(on_gl_realize),
-        pa
-    );
-
-
-    g_signal_connect(
-        pa->gl_area,
-        "unrealize",
-        G_CALLBACK(on_gl_unrealize),
-        pa
-    );
-
-
-    g_signal_connect(
-        pa->gl_area,
-        "resize",
-        G_CALLBACK(on_gl_resize),
-        pa
-    );
-
-
-    g_signal_connect(
-        pa->gl_area,
-        "render",
-        G_CALLBACK(on_gl_render),
-        pa
-    );
-
-
     /* --------------------------------------------------------
-     * RENDER MANUAL
+     * WINDOW CHILD
      * -------------------------------------------------------- */
 
-    gtk_gl_area_set_auto_render(
-        GTK_GL_AREA(pa->gl_area),
-        FALSE
+    gtk_window_set_child(
+        GTK_WINDOW(pa->window),
+        overlay
     );
 
 
@@ -1316,17 +1019,15 @@ PlayerApp *player_app_new(
             sizeof(PlayerApp)
         );
 
+
     if (!pa)
         return NULL;
 
 
     pa->app = NULL;
     pa->window = NULL;
-    pa->gl_area = NULL;
     pa->info_label = NULL;
-
-    pa->player = NULL;
-
+    pa->render = NULL;
     pa->filename = filename;
 
 
@@ -1369,6 +1070,7 @@ int player_app_run(
 
     int gtk_argc = 1;
 
+
     char *gtk_argv[] = {
         argv[0],
         NULL
@@ -1390,6 +1092,7 @@ int player_app_run(
         pa->app
     );
 
+
     pa->app = NULL;
 
 
@@ -1409,17 +1112,17 @@ void player_app_free(
 
 
     /*
-     * Normalmente GtkGLArea já chamou
-     * on_gl_unrealize().
+     * O Render é o dono do Player e do
+     * mpv_render_context.
      */
 
-    if (pa->player) {
+    if (pa->render) {
 
-        player_free(
-            pa->player
+        render_free(
+            pa->render
         );
 
-        pa->player = NULL;
+        pa->render = NULL;
     }
 
 

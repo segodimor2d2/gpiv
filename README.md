@@ -8,26 +8,44 @@ make
 
 ---
 
-## estado assim
+## A estrutura final ficaria assim
 
-| Componente                    | Estado |
-| ----------------------------- | ------ |
-| GTK4                          | ✅      |
-| GtkGLArea                     | ✅      |
-| OpenGL                        | ✅      |
-| AMD/Mesa                      | ✅      |
-| `LC_NUMERIC=C`                | ✅      |
-| `mpv_create()`                | ✅      |
-| `mpv_initialize()`            | ✅      |
-| `mpv_render_context_create()` | ✅      |
-| `loadfile`                    | ✅      |
-| abertura do arquivo           | ✅      |
-| decoder                       | ✅      |
-| geração de frames             | ✅      |
-| update callback               | ✅      |
-| `gtk_gl_area_queue_render()`  | ✅      |
-| `GtkGLArea::render`           | ✅      |
-| `mpv_render_context_render()` | ✅      |
-| FBO 0                         | ✅      |
-| vídeo na tela                 | **✅**  |
-| reprodução até o fim          | **✅**  |
+Eu visualizaria o projeto desta maneira:
+
+```text
+                         ┌──────────────┐
+                         │   main.c     │
+                         └──────┬───────┘
+                                │
+                                ▼
+                         ┌──────────────┐
+                         │    app.c     │
+                         └──────┬───────┘
+                                │
+             ┌──────────────────┼──────────────────┐
+             │                  │                  │
+             ▼                  ▼                  ▼
+       ┌───────────┐      ┌───────────┐      ┌───────────┐
+       │ media.c   │      │ player.c  │      │   ui.c    │
+       │           │      │           │      │           │
+       │ playlist  │      │   mpv     │      │ GTK       │
+       │ arquivos  │      │ comandos  │      │ widgets   │
+       │ ordenação │      │ transform │      │ signals   │
+       └─────┬─────┘      └─────┬─────┘      └─────┬─────┘
+             │                  │                  │
+             └──────────────────┼──────────────────┘
+                                │
+                                ▼
+                         ┌──────────────┐
+                         │  render.c   │
+                         │ GTK + OpenGL│
+                         │ + mpv render│
+                         └──────────────┘
+
+                         ┌──────────────┐
+                         │ controls.c  │
+                         │ teclado     │
+                         │ mouse       │
+                         │ scroll      │
+                         └──────────────┘
+```

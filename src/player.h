@@ -2,14 +2,13 @@
 #define PLAYER_H
 
 #include <mpv/client.h>
-#include <mpv/render_gl.h>
 
 typedef struct _Player Player;
 
 
-/*
- * Criação / destruição
- */
+/* ============================================================
+ * CRIAÇÃO / DESTRUIÇÃO
+ * ============================================================ */
 
 Player *player_new(void);
 
@@ -18,29 +17,35 @@ void player_free(
 );
 
 
-/*
- * Inicialização
+/* ============================================================
+ * INICIALIZAÇÃO
  *
- * get_proc_address:
- *     função usada pelo mpv para obter
- *     os ponteiros OpenGL.
+ * O player é responsável somente pelo mpv.
  *
- * update_callback:
- *     chamado pelo mpv quando precisa
- *     que a área OpenGL seja redesenhada.
- */
+ * O mpv_render_context pertence ao render.c.
+ * ============================================================ */
 
 int player_initialize(
     Player *player,
-    const char *filename,
-    mpv_render_update_fn update_callback,
-    void *update_callback_ctx
+    const char *filename
 );
 
 
-/*
- * Arquivo
- */
+/* ============================================================
+ * MPV HANDLE
+ *
+ * Usado pelo render.c para criar o
+ * mpv_render_context.
+ * ============================================================ */
+
+mpv_handle *player_get_mpv(
+    Player *player
+);
+
+
+/* ============================================================
+ * ARQUIVO
+ * ============================================================ */
 
 int player_load_file(
     Player *player,
@@ -48,27 +53,18 @@ int player_load_file(
 );
 
 
-/*
- * Renderização
- */
-
-mpv_render_context *player_get_render_context(
-    Player *player
-);
-
-
-/*
- * Eventos
- */
+/* ============================================================
+ * EVENTOS
+ * ============================================================ */
 
 void player_check_events(
     Player *player
 );
 
 
-/*
- * Reprodução
- */
+/* ============================================================
+ * REPRODUÇÃO
+ * ============================================================ */
 
 void player_toggle_pause(
     Player *player
@@ -83,9 +79,9 @@ void player_frame_forward(
 );
 
 
-/*
- * Zoom
- */
+/* ============================================================
+ * ZOOM
+ * ============================================================ */
 
 void player_change_zoom(
     Player *player,
@@ -93,9 +89,9 @@ void player_change_zoom(
 );
 
 
-/*
- * Pan
- */
+/* ============================================================
+ * PAN
+ * ============================================================ */
 
 void player_pan_begin(
     Player *player,
@@ -116,18 +112,18 @@ void player_pan_end(
 );
 
 
-/*
- * Reset
- */
+/* ============================================================
+ * RESET VIEW
+ * ============================================================ */
 
 void player_reset_view(
     Player *player
 );
 
 
-/*
- * Imagem
- */
+/* ============================================================
+ * IMAGEM
+ * ============================================================ */
 
 void player_rotate(
     Player *player
@@ -139,9 +135,9 @@ void player_change_brightness(
 );
 
 
-/*
- * Screenshot
- */
+/* ============================================================
+ * SCREENSHOT
+ * ============================================================ */
 
 void player_save_frame(
     Player *player

@@ -1,52 +1,42 @@
-#ifndef APP_H
-#define APP_H
+#ifndef RENDER_H
+#define RENDER_H
 
 #include <gtk/gtk.h>
 
-#include "render.h"
+#include "player.h"
 
 
-typedef struct _PlayerApp {
-
-    GtkApplication *app;
-
-    GtkWidget *window;
-
-    GtkWidget *info_label;
-
-    Render *render;
-
-    const char *filename;
-
-} PlayerApp;
+typedef struct _Render Render;
 
 
 /* ============================================================
- * CRIAÇÃO
+ * CRIAÇÃO / DESTRUIÇÃO
  * ============================================================ */
 
-PlayerApp *player_app_new(
+Render *render_new(
     const char *filename
 );
 
-
-/* ============================================================
- * EXECUÇÃO
- * ============================================================ */
-
-int player_app_run(
-    PlayerApp *pa,
-    int argc,
-    char **argv
+void render_free(
+    Render *render
 );
 
 
 /* ============================================================
- * DESTRUIÇÃO
+ * GTK WIDGET
  * ============================================================ */
 
-void player_app_free(
-    PlayerApp *pa
+GtkWidget *render_get_widget(
+    Render *render
+);
+
+
+/* ============================================================
+ * PLAYER
+ * ============================================================ */
+
+Player *render_get_player(
+    Render *render
 );
 
 #endif
