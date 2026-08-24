@@ -11,7 +11,8 @@ SRC = \
 	src/player.c \
 	src/render.c \
 	src/ui.c \
-	src/controls.c
+	src/controls.c \
+	src/filelist.c
 
 BIN = gpiv
 
