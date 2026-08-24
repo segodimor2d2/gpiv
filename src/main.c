@@ -56,7 +56,7 @@ int main(
      * ./gpiv -n
      * ./gpiv -t
      * ./gpiv /home/segodimo/videos/
-     * ./gpiv /home/segodimo/videos/video.mp4
+     * ./gpiv /home/segodimo/videos/tst2.mp4
      */
 
     for (int i = 1;
@@ -255,7 +255,7 @@ int main(
 
 
     /* --------------------------------------------------------
-     * DEBUG
+     * IMPRIME LISTA
      * -------------------------------------------------------- */
 
     filelist_print(
@@ -298,21 +298,21 @@ int main(
 
 
     /* --------------------------------------------------------
-     * PRIMEIRO ITEM DA FILELIST
+     * PRIMEIRO ITEM
      * -------------------------------------------------------- */
 
-    const char *first_file =
+    const char *filename =
         filelist_get(
             list,
             0
         );
 
 
-    if (!first_file) {
+    if (!filename) {
 
         fprintf(
             stderr,
-            "[MAIN] ERRO: primeiro item da FileList é NULL\n"
+            "[MAIN] ERRO: primeiro arquivo NULL\n"
         );
 
 
@@ -328,23 +328,24 @@ int main(
     fprintf(
         stderr,
         "[MAIN] primeiro item da FileList:\n"
+    );
+
+
+    fprintf(
+        stderr,
         "[MAIN]     %s\n",
-        first_file
+        filename
     );
 
 
     /* --------------------------------------------------------
      * PLAYER APP
-     *
-     * PlayerApp recebe o PRIMEIRO ITEM da FileList.
-     *
-     * player_app_new() faz uma cópia da string.
-     * Portanto a FileList poderá ser liberada imediatamente.
      * -------------------------------------------------------- */
 
     PlayerApp *pa =
         player_app_new(
-            first_file
+            list,
+            0
         );
 
 
@@ -366,26 +367,8 @@ int main(
 
 
     /* --------------------------------------------------------
-     * FILELIST NÃO É MAIS NECESSÁRIA NESTA ETAPA
+     * EXECUTA GTK
      * -------------------------------------------------------- */
-
-    filelist_free(
-        list
-    );
-
-
-    list = NULL;
-
-
-    /* --------------------------------------------------------
-     * EXECUTA PLAYER APP
-     * -------------------------------------------------------- */
-
-    fprintf(
-        stderr,
-        "[MAIN] iniciando PlayerApp\n"
-    );
-
 
     int status =
         player_app_run(
@@ -401,6 +384,18 @@ int main(
 
     player_app_free(
         pa
+    );
+
+
+    /*
+     * PlayerApp usou a FileList durante toda a
+     * execução do GTK.
+     *
+     * Agora o GTK terminou e podemos liberar.
+     */
+
+    filelist_free(
+        list
     );
 
 

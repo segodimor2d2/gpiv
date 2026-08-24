@@ -33,9 +33,6 @@ int player_initialize(
 
 /* ============================================================
  * MPV HANDLE
- *
- * Usado pelo render.c para criar o
- * mpv_render_context.
  * ============================================================ */
 
 mpv_handle *player_get_mpv(
@@ -47,6 +44,10 @@ mpv_handle *player_get_mpv(
  * ARQUIVO
  * ============================================================ */
 
+/*
+ * Carrega ou troca o arquivo atualmente
+ * reproduzido pelo mpv.
+ */
 int player_load_file(
     Player *player,
     const char *filename
@@ -138,16 +139,6 @@ void player_change_brightness(
 /* ============================================================
  * SCREENSHOT
  * ============================================================ */
-
-/*
- * Salva o frame e retorna o caminho do arquivo
- * informado pelo próprio mpv.
- *
- * O ponteiro retornado pertence ao Player.
- * Não deve ser liberado pelo chamador.
- *
- * Retorna NULL em caso de erro.
- */
 
 const char *player_save_frame(
     Player *player

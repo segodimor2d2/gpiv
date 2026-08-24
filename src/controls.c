@@ -19,9 +19,7 @@ typedef struct {
 
     GtkWidget *info_label;
 
-    Render *render;
-
-    const char *filename;
+    PlayerApp *app;
 
 } Controls;
 
@@ -41,11 +39,17 @@ static gboolean restore_info_label(
         return G_SOURCE_REMOVE;
 
 
-    if (controls->filename) {
+    const char *filename =
+        player_app_get_filename(
+            controls->app
+        );
+
+
+    if (filename) {
 
         gtk_label_set_text(
             GTK_LABEL(controls->info_label),
-            controls->filename
+            filename
         );
 
     } else {
@@ -97,8 +101,18 @@ static void copy_video_path(
     Controls *controls)
 {
     if (!controls ||
-        !controls->filename ||
+        !controls->app ||
         !controls->window)
+        return;
+
+
+    const char *filename =
+        player_app_get_filename(
+            controls->app
+        );
+
+
+    if (!filename)
         return;
 
 
@@ -124,14 +138,14 @@ static void copy_video_path(
 
     gdk_clipboard_set_text(
         clipboard,
-        controls->filename
+        filename
     );
 
 
     fprintf(
         stderr,
         "[CLIPBOARD] copiado: %s\n",
-        controls->filename
+        filename
     );
 
 
@@ -139,6 +153,106 @@ static void copy_video_path(
         controls,
         "Path copiado"
     );
+}
+
+
+/* ============================================================
+ * ARQUIVO ANTERIOR
+ * ============================================================ */
+
+static void previous_file(
+    Controls *controls)
+{
+    if (!controls ||
+        !controls->app)
+        return;
+
+
+    int status =
+        player_app_previous(
+            controls->app
+        );
+
+
+    if (status == 0) {
+
+        const char *filename =
+            player_app_get_filename(
+                controls->app
+            );
+
+
+        if (filename) {
+
+            gtk_label_set_text(
+                GTK_LABEL(controls->info_label),
+                filename
+            );
+        }
+
+
+        fprintf(
+            stderr,
+            "[KEY] arquivo anterior carregado\n"
+        );
+
+    } else {
+
+        show_message(
+            controls,
+            "Primeiro arquivo"
+        );
+    }
+}
+
+
+/* ============================================================
+ * PRÓXIMO ARQUIVO
+ * ============================================================ */
+
+static void next_file(
+    Controls *controls)
+{
+    if (!controls ||
+        !controls->app)
+        return;
+
+
+    int status =
+        player_app_next(
+            controls->app
+        );
+
+
+    if (status == 0) {
+
+        const char *filename =
+            player_app_get_filename(
+                controls->app
+            );
+
+
+        if (filename) {
+
+            gtk_label_set_text(
+                GTK_LABEL(controls->info_label),
+                filename
+            );
+        }
+
+
+        fprintf(
+            stderr,
+            "[KEY] próximo arquivo carregado\n"
+        );
+
+    } else {
+
+        show_message(
+            controls,
+            "Último arquivo"
+        );
+    }
 }
 
 
@@ -172,11 +286,12 @@ static gboolean on_key_pressed(
     Player *player = NULL;
 
 
-    if (controls->render) {
+    if (controls->app &&
+        controls->app->render) {
 
         player =
             render_get_player(
-                controls->render
+                controls->app->render
             );
     }
 
@@ -200,6 +315,38 @@ static gboolean on_key_pressed(
                 GTK_WINDOW(controls->window)
             );
         }
+
+
+        return TRUE;
+    }
+
+
+    /* --------------------------------------------------------
+     * H -> ARQUIVO ANTERIOR
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_h ||
+        keyval == GDK_KEY_H) {
+
+        previous_file(
+            controls
+        );
+
+
+        return TRUE;
+    }
+
+
+    /* --------------------------------------------------------
+     * L -> PRÓXIMO ARQUIVO
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_l ||
+        keyval == GDK_KEY_L) {
+
+        next_file(
+            controls
+        );
 
 
         return TRUE;
@@ -278,11 +425,6 @@ static gboolean on_key_pressed(
 
 
             if (screenshot) {
-
-                /*
-                 * Mostra exatamente o nome/caminho
-                 * retornado pelo mpv.
-                 */
 
                 show_message(
                     controls,
@@ -415,13 +557,14 @@ static gboolean on_scroll(
 
 
     if (!controls ||
-        !controls->render)
+        !controls->app ||
+        !controls->app->render)
         return FALSE;
 
 
     Player *player =
         render_get_player(
-            controls->render
+            controls->app->render
         );
 
 
@@ -453,13 +596,14 @@ static void on_drag_begin(
 
 
     if (!controls ||
-        !controls->render)
+        !controls->app ||
+        !controls->app->render)
         return;
 
 
     Player *player =
         render_get_player(
-            controls->render
+            controls->app->render
         );
 
 
@@ -489,14 +633,15 @@ static void on_drag_update(
 
 
     if (!controls ||
-        !controls->render ||
+        !controls->app ||
+        !controls->app->render ||
         !controls->gl_area)
         return;
 
 
     Player *player =
         render_get_player(
-            controls->render
+            controls->app->render
         );
 
 
@@ -542,13 +687,14 @@ static void on_drag_end(
 
 
     if (!controls ||
-        !controls->render)
+        !controls->app ||
+        !controls->app->render)
         return;
 
 
     Player *player =
         render_get_player(
-            controls->render
+            controls->app->render
         );
 
 
@@ -663,12 +809,12 @@ void controls_setup(
     GtkWidget *window,
     GtkWidget *gl_area,
     GtkWidget *info_label,
-    Render *render,
-    const char *filename)
+    PlayerApp *app)
 {
     if (!window ||
         !gl_area ||
-        !render)
+        !app ||
+        !app->render)
         return;
 
 
@@ -698,8 +844,7 @@ void controls_setup(
     controls->window = window;
     controls->gl_area = gl_area;
     controls->info_label = info_label;
-    controls->render = render;
-    controls->filename = filename;
+    controls->app = app;
 
 
     fprintf(

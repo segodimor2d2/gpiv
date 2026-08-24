@@ -7,7 +7,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 
 /* ============================================================
@@ -25,12 +24,40 @@ static void on_activate(
 
 
     /* --------------------------------------------------------
+     * ARQUIVO ATUAL
+     * -------------------------------------------------------- */
+
+    const char *filename =
+        player_app_get_filename(
+            pa
+        );
+
+
+    if (!filename) {
+
+        fprintf(
+            stderr,
+            "[APP] ERRO: filename atual NULL\n"
+        );
+
+        return;
+    }
+
+
+    fprintf(
+        stderr,
+        "[APP] arquivo inicial = %s\n",
+        filename
+    );
+
+
+    /* --------------------------------------------------------
      * RENDER
      * -------------------------------------------------------- */
 
     pa->render =
         render_new(
-            pa->filename
+            filename
         );
 
 
@@ -53,7 +80,7 @@ static void on_activate(
         ui_create_window(
             app,
             pa->render,
-            pa->filename,
+            filename,
             &pa->info_label
         );
 
@@ -108,8 +135,7 @@ static void on_activate(
         pa->window,
         gl_area,
         pa->info_label,
-        pa->render,
-        pa->filename
+        pa
     );
 
 
@@ -124,13 +150,318 @@ static void on_activate(
 
 
 /* ============================================================
+ * GET FILENAME
+ * ============================================================ */
+
+const char *player_app_get_filename(
+    PlayerApp *pa)
+{
+    if (!pa ||
+        !pa->filelist)
+        return NULL;
+
+
+    return filelist_get(
+        pa->filelist,
+        pa->current_index
+    );
+}
+
+
+/* ============================================================
+ * GET CURRENT INDEX
+ * ============================================================ */
+
+size_t player_app_get_current_index(
+    PlayerApp *pa)
+{
+    if (!pa)
+        return 0;
+
+
+    return pa->current_index;
+}
+
+
+/* ============================================================
+ * NEXT
+ * ============================================================ */
+
+int player_app_next(
+    PlayerApp *pa)
+{
+    if (!pa ||
+        !pa->filelist ||
+        !pa->render)
+        return -1;
+
+
+    size_t count =
+        filelist_count(
+            pa->filelist
+        );
+
+
+    if (count == 0)
+        return -1;
+
+
+    /* --------------------------------------------------------
+     * JÁ ESTÁ NO ÚLTIMO
+     * -------------------------------------------------------- */
+
+    if (pa->current_index + 1 >= count) {
+
+        fprintf(
+            stderr,
+            "[APP] já está no último arquivo\n"
+        );
+
+        return -1;
+    }
+
+
+    size_t next_index =
+        pa->current_index + 1;
+
+
+    const char *filename =
+        filelist_get(
+            pa->filelist,
+            next_index
+        );
+
+
+    if (!filename)
+        return -1;
+
+
+    /* --------------------------------------------------------
+     * PLAYER
+     * -------------------------------------------------------- */
+
+    Player *player =
+        render_get_player(
+            pa->render
+        );
+
+
+    if (!player) {
+
+        fprintf(
+            stderr,
+            "[APP] Player NULL\n"
+        );
+
+        return -1;
+    }
+
+
+    fprintf(
+        stderr,
+        "[APP] próximo arquivo\n"
+    );
+
+
+    fprintf(
+        stderr,
+        "[APP] índice: %zu -> %zu\n",
+        pa->current_index,
+        next_index
+    );
+
+
+    fprintf(
+        stderr,
+        "[APP] arquivo: %s\n",
+        filename
+    );
+
+
+    int status =
+        player_load_file(
+            player,
+            filename
+        );
+
+
+    if (status < 0) {
+
+        fprintf(
+            stderr,
+            "[APP] ERRO carregando próximo arquivo\n"
+        );
+
+        return -1;
+    }
+
+
+    pa->current_index =
+        next_index;
+
+
+    fprintf(
+        stderr,
+        "[APP] arquivo atual = %zu\n",
+        pa->current_index
+    );
+
+
+    return 0;
+}
+
+
+/* ============================================================
+ * PREVIOUS
+ * ============================================================ */
+
+int player_app_previous(
+    PlayerApp *pa)
+{
+    if (!pa ||
+        !pa->filelist ||
+        !pa->render)
+        return -1;
+
+
+    size_t count =
+        filelist_count(
+            pa->filelist
+        );
+
+
+    if (count == 0)
+        return -1;
+
+
+    /* --------------------------------------------------------
+     * JÁ ESTÁ NO PRIMEIRO
+     * -------------------------------------------------------- */
+
+    if (pa->current_index == 0) {
+
+        fprintf(
+            stderr,
+            "[APP] já está no primeiro arquivo\n"
+        );
+
+        return -1;
+    }
+
+
+    size_t previous_index =
+        pa->current_index - 1;
+
+
+    const char *filename =
+        filelist_get(
+            pa->filelist,
+            previous_index
+        );
+
+
+    if (!filename)
+        return -1;
+
+
+    /* --------------------------------------------------------
+     * PLAYER
+     * -------------------------------------------------------- */
+
+    Player *player =
+        render_get_player(
+            pa->render
+        );
+
+
+    if (!player) {
+
+        fprintf(
+            stderr,
+            "[APP] Player NULL\n"
+        );
+
+        return -1;
+    }
+
+
+    fprintf(
+        stderr,
+        "[APP] arquivo anterior\n"
+    );
+
+
+    fprintf(
+        stderr,
+        "[APP] índice: %zu -> %zu\n",
+        pa->current_index,
+        previous_index
+    );
+
+
+    fprintf(
+        stderr,
+        "[APP] arquivo: %s\n",
+        filename
+    );
+
+
+    int status =
+        player_load_file(
+            player,
+            filename
+        );
+
+
+    if (status < 0) {
+
+        fprintf(
+            stderr,
+            "[APP] ERRO carregando arquivo anterior\n"
+        );
+
+        return -1;
+    }
+
+
+    pa->current_index =
+        previous_index;
+
+
+    fprintf(
+        stderr,
+        "[APP] arquivo atual = %zu\n",
+        pa->current_index
+    );
+
+
+    return 0;
+}
+
+
+/* ============================================================
  * CRIAÇÃO
  * ============================================================ */
 
 PlayerApp *player_app_new(
-    const char *filename)
+    FileList *filelist,
+    size_t current_index)
 {
-    if (!filename)
+    if (!filelist)
+        return NULL;
+
+
+    size_t count =
+        filelist_count(
+            filelist
+        );
+
+
+    if (count == 0)
+        return NULL;
+
+
+    if (current_index >= count)
         return NULL;
 
 
@@ -145,27 +476,16 @@ PlayerApp *player_app_new(
         return NULL;
 
 
-    /*
-     * O PlayerApp passa a ser dono
-     * da string filename.
-     */
-
-    pa->filename =
-        strdup(filename);
-
-
-    if (!pa->filename) {
-
-        free(pa);
-
-        return NULL;
-    }
-
-
     pa->app = NULL;
     pa->window = NULL;
     pa->info_label = NULL;
     pa->render = NULL;
+
+    pa->filelist =
+        filelist;
+
+    pa->current_index =
+        current_index;
 
 
     fprintf(
@@ -176,8 +496,15 @@ PlayerApp *player_app_new(
 
     fprintf(
         stderr,
+        "[APP] current_index = %zu\n",
+        pa->current_index
+    );
+
+
+    fprintf(
+        stderr,
         "[APP] filename = %s\n",
-        pa->filename
+        player_app_get_filename(pa)
     );
 
 
@@ -205,17 +532,6 @@ int player_app_run(
         );
 
 
-    if (!pa->app) {
-
-        fprintf(
-            stderr,
-            "[APP] ERRO criando GtkApplication\n"
-        );
-
-        return EXIT_FAILURE;
-    }
-
-
     g_signal_connect(
         pa->app,
         "activate",
@@ -239,6 +555,12 @@ int player_app_run(
 
 
     (void)argc;
+
+
+    fprintf(
+        stderr,
+        "[MAIN] iniciando PlayerApp\n"
+    );
 
 
     int status =
@@ -272,10 +594,6 @@ void player_app_free(
         return;
 
 
-    /* --------------------------------------------------------
-     * RENDER
-     * -------------------------------------------------------- */
-
     if (pa->render) {
 
         render_free(
@@ -287,30 +605,13 @@ void player_app_free(
     }
 
 
-    /* --------------------------------------------------------
-     * FILENAME
-     * -------------------------------------------------------- */
+    /*
+     * A FileList NÃO é liberada aqui.
+     *
+     * Ela pertence ao main(), que criou a lista.
+     */
 
-    free(
-        pa->filename
-    );
-
-
-    pa->filename = NULL;
-
-
-    /* --------------------------------------------------------
-     * APP
-     * -------------------------------------------------------- */
-
-    if (pa->app) {
-
-        g_object_unref(
-            pa->app
-        );
-
-        pa->app = NULL;
-    }
+    pa->filelist = NULL;
 
 
     free(pa);

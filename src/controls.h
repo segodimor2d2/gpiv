@@ -3,7 +3,7 @@
 
 #include <gtk/gtk.h>
 
-#include "render.h"
+#include "app.h"
 
 
 /* ============================================================
@@ -20,19 +20,16 @@
  * info_label:
  *     label usado para mensagens
  *
- * render:
- *     objeto responsável pela renderização e Player
- *
- * filename:
- *     arquivo atualmente reproduzido
+ * app:
+ *     PlayerApp responsável pela aplicação,
+ *     FileList e navegação entre arquivos.
  * ============================================================ */
 
 void controls_setup(
     GtkWidget *window,
     GtkWidget *gl_area,
     GtkWidget *info_label,
-    Render *render,
-    const char *filename
+    PlayerApp *app
 );
 
 #endif

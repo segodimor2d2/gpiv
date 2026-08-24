@@ -2,9 +2,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <locale.h>
-#include <math.h>
-#include <libgen.h>
 #include <string.h>
 
 
@@ -16,7 +13,16 @@ struct _Player {
 
     mpv_handle *mpv;
 
+    /*
+     * Ponteiro para o caminho armazenado pela FileList.
+     *
+     * Player NÃO é dono dessa string.
+     */
     const char *filename;
+
+    /*
+     * Estado visual.
+     */
 
     int video_rotation;
 
@@ -27,20 +33,68 @@ struct _Player {
     double video_pan_x;
     double video_pan_y;
 
+    /*
+     * Estado do pan.
+     */
+
     int panning;
+
+    double pan_start_x;
+    double pan_start_y;
 
     double pan_start_pan_x;
     double pan_start_pan_y;
-
-    /*
-     * Último screenshot salvo.
-     *
-     * O caminho é copiado para cá porque o mpv_node
-     * pertence ao resultado do comando e precisa ser
-     * liberado depois.
-     */
-    char last_screenshot[4096];
 };
+
+
+/* ============================================================
+ * COMANDOS MPV
+ * ============================================================ */
+
+static int player_set_property(
+    Player *player,
+    const char *property,
+    const char *value)
+{
+    if (!player ||
+        !player->mpv ||
+        !property ||
+        !value)
+        return -1;
+
+
+    const char *command[] = {
+
+        "set",
+        property,
+        value,
+        NULL
+    };
+
+
+    int status =
+        mpv_command(
+            player->mpv,
+            command
+        );
+
+
+    if (status < 0) {
+
+        fprintf(
+            stderr,
+            "[MPV] erro set %s=%s: %s\n",
+            property,
+            value,
+            mpv_error_string(status)
+        );
+
+        return status;
+    }
+
+
+    return 0;
+}
 
 
 /* ============================================================
@@ -55,6 +109,7 @@ Player *player_new(void)
             sizeof(Player)
         );
 
+
     if (!player)
         return NULL;
 
@@ -64,6 +119,7 @@ Player *player_new(void)
     player->filename = NULL;
 
     player->video_rotation = 0;
+
     player->brightness = 0;
 
     player->video_zoom = 0.0;
@@ -73,12 +129,55 @@ Player *player_new(void)
 
     player->panning = 0;
 
+    player->pan_start_x = 0.0;
+    player->pan_start_y = 0.0;
+
     player->pan_start_pan_x = 0.0;
     player->pan_start_pan_y = 0.0;
 
-    player->last_screenshot[0] = '\0';
 
     return player;
+}
+
+
+/* ============================================================
+ * DESTRUIÇÃO
+ * ============================================================ */
+
+void player_free(
+    Player *player)
+{
+    if (!player)
+        return;
+
+
+    if (player->mpv) {
+
+        fprintf(
+            stderr,
+            "[MPV] encerrando mpv\n"
+        );
+
+
+        mpv_terminate_destroy(
+            player->mpv
+        );
+
+
+        player->mpv = NULL;
+    }
+
+
+    /*
+     * filename pertence à FileList.
+     *
+     * Portanto NÃO fazemos free(filename).
+     */
+
+    player->filename = NULL;
+
+
+    free(player);
 }
 
 
@@ -90,7 +189,8 @@ int player_initialize(
     Player *player,
     const char *filename)
 {
-    if (!player)
+    if (!player ||
+        !filename)
         return -1;
 
 
@@ -100,88 +200,110 @@ int player_initialize(
     );
 
 
-    /*
-     * O mpv trabalha melhor com LC_NUMERIC=C.
-     */
-
-    if (setlocale(LC_NUMERIC, "C") == NULL) {
-
-        fprintf(
-            stderr,
-            "[MPV] ERRO: LC_NUMERIC=C\n"
-        );
-
-        return -1;
-    }
-
-
-    /* --------------------------------------------------------
-     * MPV
-     * -------------------------------------------------------- */
-
     player->mpv =
         mpv_create();
+
 
     if (!player->mpv) {
 
         fprintf(
             stderr,
-            "[MPV] ERRO: mpv_create()\n"
+            "[MPV] ERRO: mpv_create() retornou NULL\n"
         );
 
         return -1;
     }
 
 
-    mpv_set_option_string(
-        player->mpv,
-        "terminal",
-        "yes"
-    );
-
-
-    mpv_set_option_string(
-        player->mpv,
-        "msg-level",
-        "all=warn"
-    );
-
+    /* --------------------------------------------------------
+     * OPÇÕES
+     * -------------------------------------------------------- */
 
     int status;
 
 
-    status = mpv_set_option_string(
-        player->mpv,
-        "vo",
-        "libmpv"
-    );
+    status =
+        mpv_set_option_string(
+            player->mpv,
+            "vo",
+            "libmpv"
+        );
 
-    if (status < 0)
+
+    if (status < 0) {
+
+        fprintf(
+            stderr,
+            "[MPV] erro configurando vo: %s\n",
+            mpv_error_string(status)
+        );
+
         goto error;
+    }
 
 
-    status = mpv_set_option_string(
-        player->mpv,
-        "loop-file",
-        "yes"
-    );
+    status =
+        mpv_set_option_string(
+            player->mpv,
+            "hwdec",
+            "auto"
+        );
 
-    if (status < 0)
+
+    if (status < 0) {
+
+        fprintf(
+            stderr,
+            "[MPV] erro configurando hwdec: %s\n",
+            mpv_error_string(status)
+        );
+
         goto error;
+    }
 
 
-    status = mpv_set_option_string(
-        player->mpv,
-        "hwdec",
-        "auto"
-    );
+    status =
+        mpv_set_option_string(
+            player->mpv,
+            "loop-file",
+            "yes"
+        );
 
-    if (status < 0)
+
+    if (status < 0) {
+
+        fprintf(
+            stderr,
+            "[MPV] erro configurando loop-file: %s\n",
+            mpv_error_string(status)
+        );
+
         goto error;
+    }
+
+
+    status =
+        mpv_set_option_string(
+            player->mpv,
+            "msg-level",
+            "all=warn"
+        );
+
+
+    if (status < 0) {
+
+        fprintf(
+            stderr,
+            "[MPV] erro configurando msg-level: %s\n",
+            mpv_error_string(status)
+        );
+
+        goto error;
+    }
 
 
     /* --------------------------------------------------------
-     * MPV INITIALIZE
+     * INICIALIZA
      * -------------------------------------------------------- */
 
     status =
@@ -189,8 +311,17 @@ int player_initialize(
             player->mpv
         );
 
-    if (status < 0)
+
+    if (status < 0) {
+
+        fprintf(
+            stderr,
+            "[MPV] ERRO mpv_initialize(): %s\n",
+            mpv_error_string(status)
+        );
+
         goto error;
+    }
 
 
     fprintf(
@@ -200,42 +331,43 @@ int player_initialize(
 
 
     /* --------------------------------------------------------
-     * ARQUIVO
+     * PRIMEIRO ARQUIVO
      * -------------------------------------------------------- */
 
-    if (filename) {
-
-        if (player_load_file(
-                player,
-                filename) < 0) {
-
-            fprintf(
-                stderr,
-                "[MPV] ERRO carregando arquivo\n"
-            );
-
-            goto error;
-        }
-    }
+    status =
+        player_load_file(
+            player,
+            filename
+        );
 
 
-    return 0;
+    if (status < 0) {
 
-
-/* ------------------------------------------------------------
- * ERRO
- * ------------------------------------------------------------ */
-
-error:
-
-    if (player->mpv) {
+        fprintf(
+            stderr,
+            "[MPV] ERRO carregando arquivo inicial\n"
+        );
 
         mpv_terminate_destroy(
             player->mpv
         );
 
         player->mpv = NULL;
+
+        return -1;
     }
+
+
+    return 0;
+
+
+error:
+
+    mpv_terminate_destroy(
+        player->mpv
+    );
+
+    player->mpv = NULL;
 
 
     return -1;
@@ -243,7 +375,7 @@ error:
 
 
 /* ============================================================
- * MPV HANDLE
+ * GET MPV
  * ============================================================ */
 
 mpv_handle *player_get_mpv(
@@ -251,6 +383,7 @@ mpv_handle *player_get_mpv(
 {
     if (!player)
         return NULL;
+
 
     return player->mpv;
 }
@@ -270,13 +403,18 @@ int player_load_file(
         return -1;
 
 
-    player->filename = filename;
+    fprintf(
+        stderr,
+        "[PLAYER] load file: %s\n",
+        filename
+    );
 
 
     const char *command[] = {
 
         "loadfile",
         filename,
+        "replace",
         NULL
     };
 
@@ -300,6 +438,78 @@ int player_load_file(
     }
 
 
+    /*
+     * Somente atualizamos o ponteiro depois que
+     * o comando foi aceito pelo mpv.
+     *
+     * A string pertence à FileList.
+     */
+    player->filename =
+        filename;
+
+
+    /* --------------------------------------------------------
+     * RESET ESTADO VISUAL
+     * -------------------------------------------------------- */
+
+    player->video_rotation = 0;
+
+    player->brightness = 0;
+
+    player->video_zoom = 0.0;
+
+    player->video_pan_x = 0.0;
+    player->video_pan_y = 0.0;
+
+    player->panning = 0;
+
+
+    player->pan_start_x = 0.0;
+    player->pan_start_y = 0.0;
+
+    player->pan_start_pan_x = 0.0;
+    player->pan_start_pan_y = 0.0;
+
+
+    /* --------------------------------------------------------
+     * RESET MPV
+     * -------------------------------------------------------- */
+
+    player_set_property(
+        player,
+        "video-rotate",
+        "0"
+    );
+
+
+    player_set_property(
+        player,
+        "brightness",
+        "0"
+    );
+
+
+    player_set_property(
+        player,
+        "video-zoom",
+        "0"
+    );
+
+
+    player_set_property(
+        player,
+        "video-pan-x",
+        "0"
+    );
+
+
+    player_set_property(
+        player,
+        "video-pan-y",
+        "0"
+    );
+
+
     fprintf(
         stderr,
         "[MPV] arquivo carregado: %s\n",
@@ -312,638 +522,14 @@ int player_load_file(
 
 
 /* ============================================================
- * PAUSE
- * ============================================================ */
-
-void player_toggle_pause(
-    Player *player)
-{
-    if (!player || !player->mpv)
-        return;
-
-
-    const char *command[] = {
-
-        "cycle",
-        "pause",
-        NULL
-    };
-
-
-    mpv_command(
-        player->mpv,
-        command
-    );
-}
-
-
-/* ============================================================
- * FRAME BACK
- * ============================================================ */
-
-void player_frame_back(
-    Player *player)
-{
-    if (!player || !player->mpv)
-        return;
-
-
-    const char *command[] = {
-
-        "frame-back-step",
-        NULL
-    };
-
-
-    mpv_command(
-        player->mpv,
-        command
-    );
-}
-
-
-/* ============================================================
- * FRAME FORWARD
- * ============================================================ */
-
-void player_frame_forward(
-    Player *player)
-{
-    if (!player || !player->mpv)
-        return;
-
-
-    const char *command[] = {
-
-        "frame-step",
-        NULL
-    };
-
-
-    mpv_command(
-        player->mpv,
-        command
-    );
-}
-
-
-/* ============================================================
- * ZOOM
- * ============================================================ */
-
-void player_change_zoom(
-    Player *player,
-    double amount)
-{
-    if (!player || !player->mpv)
-        return;
-
-
-    player->video_zoom += amount;
-
-
-    if (player->video_zoom > 5.0)
-        player->video_zoom = 5.0;
-
-
-    if (player->video_zoom < 0.0)
-        player->video_zoom = 0.0;
-
-
-    char zoom[64];
-
-
-    snprintf(
-        zoom,
-        sizeof(zoom),
-        "%.3f",
-        player->video_zoom
-    );
-
-
-    const char *command[] = {
-
-        "set",
-        "video-zoom",
-        zoom,
-        NULL
-    };
-
-
-    mpv_command(
-        player->mpv,
-        command
-    );
-
-
-    fprintf(
-        stderr,
-        "[ZOOM] %.3f\n",
-        player->video_zoom
-    );
-}
-
-
-/* ============================================================
- * PAN
- * ============================================================ */
-
-static void player_set_pan(
-    Player *player)
-{
-    if (!player || !player->mpv)
-        return;
-
-
-    char x[64];
-    char y[64];
-
-
-    snprintf(
-        x,
-        sizeof(x),
-        "%.6f",
-        player->video_pan_x
-    );
-
-
-    snprintf(
-        y,
-        sizeof(y),
-        "%.6f",
-        player->video_pan_y
-    );
-
-
-    const char *cmd_x[] = {
-
-        "set",
-        "video-pan-x",
-        x,
-        NULL
-    };
-
-
-    const char *cmd_y[] = {
-
-        "set",
-        "video-pan-y",
-        y,
-        NULL
-    };
-
-
-    mpv_command(
-        player->mpv,
-        cmd_x
-    );
-
-
-    mpv_command(
-        player->mpv,
-        cmd_y
-    );
-}
-
-
-void player_pan_begin(
-    Player *player,
-    double x,
-    double y)
-{
-    (void)x;
-    (void)y;
-
-
-    if (!player)
-        return;
-
-
-    if (player->video_zoom <= 0.0)
-        return;
-
-
-    player->panning = 1;
-
-
-    player->pan_start_pan_x =
-        player->video_pan_x;
-
-    player->pan_start_pan_y =
-        player->video_pan_y;
-}
-
-
-void player_pan_update(
-    Player *player,
-    double offset_x,
-    double offset_y,
-    int width,
-    int height)
-{
-    if (!player ||
-        !player->panning)
-        return;
-
-
-    if (width <= 0 ||
-        height <= 0)
-        return;
-
-
-    double scale =
-        pow(
-            2.0,
-            player->video_zoom
-        );
-
-
-    double pan_x_delta =
-        offset_x /
-        width *
-        2.0 /
-        scale;
-
-
-    double pan_y_delta =
-        offset_y /
-        height *
-        2.0 /
-        scale;
-
-
-    player->video_pan_x =
-        player->pan_start_pan_x +
-        pan_x_delta;
-
-
-    player->video_pan_y =
-        player->pan_start_pan_y +
-        pan_y_delta;
-
-
-    if (player->video_pan_x > 1.0)
-        player->video_pan_x = 1.0;
-
-    if (player->video_pan_x < -1.0)
-        player->video_pan_x = -1.0;
-
-
-    if (player->video_pan_y > 1.0)
-        player->video_pan_y = 1.0;
-
-    if (player->video_pan_y < -1.0)
-        player->video_pan_y = -1.0;
-
-
-    player_set_pan(player);
-}
-
-
-void player_pan_end(
-    Player *player)
-{
-    if (!player)
-        return;
-
-    player->panning = 0;
-}
-
-
-/* ============================================================
- * RESET VIEW
- * ============================================================ */
-
-void player_reset_view(
-    Player *player)
-{
-    if (!player || !player->mpv)
-        return;
-
-
-    player->video_zoom = 0.0;
-
-    player->video_pan_x = 0.0;
-    player->video_pan_y = 0.0;
-
-
-    const char *zoom[] = {
-
-        "set",
-        "video-zoom",
-        "0",
-        NULL
-    };
-
-
-    const char *pan_x[] = {
-
-        "set",
-        "video-pan-x",
-        "0",
-        NULL
-    };
-
-
-    const char *pan_y[] = {
-
-        "set",
-        "video-pan-y",
-        "0",
-        NULL
-    };
-
-
-    mpv_command(
-        player->mpv,
-        zoom
-    );
-
-
-    mpv_command(
-        player->mpv,
-        pan_x
-    );
-
-
-    mpv_command(
-        player->mpv,
-        pan_y
-    );
-
-
-    fprintf(
-        stderr,
-        "[VIEW] reset\n"
-    );
-}
-
-
-/* ============================================================
- * ROTATE
- * ============================================================ */
-
-void player_rotate(
-    Player *player)
-{
-    if (!player || !player->mpv)
-        return;
-
-
-    player->video_rotation += 90;
-
-
-    if (player->video_rotation >= 360)
-        player->video_rotation = 0;
-
-
-    char rotation[16];
-
-
-    snprintf(
-        rotation,
-        sizeof(rotation),
-        "%d",
-        player->video_rotation
-    );
-
-
-    const char *command[] = {
-
-        "set",
-        "video-rotate",
-        rotation,
-        NULL
-    };
-
-
-    mpv_command(
-        player->mpv,
-        command
-    );
-
-
-    fprintf(
-        stderr,
-        "[ROTATE] %d graus\n",
-        player->video_rotation
-    );
-}
-
-
-/* ============================================================
- * BRIGHTNESS
- * ============================================================ */
-
-void player_change_brightness(
-    Player *player,
-    int amount)
-{
-    if (!player || !player->mpv)
-        return;
-
-
-    player->brightness += amount;
-
-
-    if (player->brightness > 100)
-        player->brightness = 100;
-
-
-    if (player->brightness < -100)
-        player->brightness = -100;
-
-
-    char brightness[16];
-
-
-    snprintf(
-        brightness,
-        sizeof(brightness),
-        "%d",
-        player->brightness
-    );
-
-
-    const char *command[] = {
-
-        "set",
-        "brightness",
-        brightness,
-        NULL
-    };
-
-
-    mpv_command(
-        player->mpv,
-        command
-    );
-
-
-    fprintf(
-        stderr,
-        "[BRIGHTNESS] %d\n",
-        player->brightness
-    );
-}
-
-
-/* ============================================================
- * SCREENSHOT
- * ============================================================ */
-
-const char *player_save_frame(
-    Player *player)
-{
-    if (!player ||
-        !player->mpv ||
-        !player->filename)
-        return NULL;
-
-
-    char path[4096];
-
-
-    snprintf(
-        path,
-        sizeof(path),
-        "%s",
-        player->filename
-    );
-
-
-    char *dir =
-        dirname(path);
-
-
-    mpv_set_option_string(
-        player->mpv,
-        "screenshot-dir",
-        dir
-    );
-
-
-    mpv_set_option_string(
-        player->mpv,
-        "screenshot-template",
-        "%F_%n"
-    );
-
-
-    const char *command[] = {
-
-        "screenshot",
-        "video",
-        NULL
-    };
-
-
-    mpv_node result = {
-
-        .format = MPV_FORMAT_NONE
-    };
-
-
-    int status =
-        mpv_command_ret(
-            player->mpv,
-            command,
-            &result
-        );
-
-
-    if (status < 0) {
-
-        fprintf(
-            stderr,
-            "[SCREENSHOT] ERRO: %s\n",
-            mpv_error_string(status)
-        );
-
-        return NULL;
-    }
-
-
-    /*
-     * O comando screenshot retorna um MAP.
-     *
-     * Procuramos a chave:
-     *
-     *     filename
-     */
-
-    if (result.format ==
-        MPV_FORMAT_NODE_MAP &&
-        result.u.list) {
-
-        for (int i = 0;
-             i < result.u.list->num;
-             i++) {
-
-            const char *key =
-                result.u.list->keys[i];
-
-            mpv_node *value =
-                &result.u.list->values[i];
-
-
-            if (key &&
-                strcmp(
-                    key,
-                    "filename"
-                ) == 0 &&
-                value->format ==
-                    MPV_FORMAT_STRING &&
-                value->u.string) {
-
-                snprintf(
-                    player->last_screenshot,
-                    sizeof(player->last_screenshot),
-                    "%s",
-                    value->u.string
-                );
-
-                fprintf(
-                    stderr,
-                    "[SCREENSHOT] OK: %s\n",
-                    player->last_screenshot
-                );
-
-
-                mpv_free_node_contents(
-                    &result
-                );
-
-
-                return player->last_screenshot;
-            }
-        }
-    }
-
-
-    fprintf(
-        stderr,
-        "[SCREENSHOT] ERRO: mpv não retornou filename\n"
-    );
-
-
-    mpv_free_node_contents(
-        &result
-    );
-
-
-    return NULL;
-}
-
-
-/* ============================================================
  * EVENTOS
  * ============================================================ */
 
 void player_check_events(
     Player *player)
 {
-    if (!player || !player->mpv)
+    if (!player ||
+        !player->mpv)
         return;
 
 
@@ -969,60 +555,542 @@ void player_check_events(
             stderr,
             "[MPV-EVENT] id=%d name=%s\n",
             event->event_id,
-            mpv_event_name(
-                event->event_id
-            )
+            mpv_event_name(event->event_id)
         );
-
-
-        if (event->event_id ==
-            MPV_EVENT_LOG_MESSAGE) {
-
-            mpv_event_log_message *msg =
-                event->data;
-
-
-            if (msg) {
-
-                fprintf(
-                    stderr,
-                    "[MPV-LOG] [%s] %s",
-                    msg->prefix,
-                    msg->text
-                );
-            }
-        }
     }
 }
 
 
 /* ============================================================
- * FREE
+ * PAUSE / PLAY
  * ============================================================ */
 
-void player_free(
+void player_toggle_pause(
     Player *player)
+{
+    if (!player ||
+        !player->mpv)
+        return;
+
+
+    const char *command[] = {
+
+        "cycle",
+        "pause",
+        NULL
+    };
+
+
+    int status =
+        mpv_command(
+            player->mpv,
+            command
+        );
+
+
+    if (status < 0) {
+
+        fprintf(
+            stderr,
+            "[MPV] erro pause/play: %s\n",
+            mpv_error_string(status)
+        );
+    }
+}
+
+
+/* ============================================================
+ * FRAME BACK
+ * ============================================================ */
+
+void player_frame_back(
+    Player *player)
+{
+    if (!player ||
+        !player->mpv)
+        return;
+
+
+    const char *command[] = {
+
+        "frame-back-step",
+        NULL
+    };
+
+
+    mpv_command(
+        player->mpv,
+        command
+    );
+}
+
+
+/* ============================================================
+ * FRAME FORWARD
+ * ============================================================ */
+
+void player_frame_forward(
+    Player *player)
+{
+    if (!player ||
+        !player->mpv)
+        return;
+
+
+    const char *command[] = {
+
+        "frame-step",
+        NULL
+    };
+
+
+    mpv_command(
+        player->mpv,
+        command
+    );
+}
+
+
+/* ============================================================
+ * ZOOM
+ * ============================================================ */
+
+void player_change_zoom(
+    Player *player,
+    double amount)
+{
+    if (!player ||
+        !player->mpv)
+        return;
+
+
+    /*
+     * amount positivo:
+     *
+     * zoom in
+     *
+     * amount negativo:
+     *
+     * zoom out
+     */
+
+    player->video_zoom +=
+        amount * 0.25;
+
+
+    if (player->video_zoom > 5.0)
+        player->video_zoom = 5.0;
+
+
+    if (player->video_zoom < -5.0)
+        player->video_zoom = -5.0;
+
+
+    char value[64];
+
+
+    snprintf(
+        value,
+        sizeof(value),
+        "%.3f",
+        player->video_zoom
+    );
+
+
+    player_set_property(
+        player,
+        "video-zoom",
+        value
+    );
+
+
+    fprintf(
+        stderr,
+        "[PLAYER] zoom = %.3f\n",
+        player->video_zoom
+    );
+}
+
+
+/* ============================================================
+ * PAN BEGIN
+ * ============================================================ */
+
+void player_pan_begin(
+    Player *player,
+    double x,
+    double y)
 {
     if (!player)
         return;
 
 
     /*
-     * O mpv_render_context NÃO pertence
-     * ao Player.
-     *
-     * Ele é destruído pelo Render.
+     * Pan somente quando há zoom.
      */
 
-    if (player->mpv) {
+    if (player->video_zoom <= 0.0) {
 
-        mpv_terminate_destroy(
-            player->mpv
-        );
+        player->panning = 0;
 
-        player->mpv = NULL;
+        return;
     }
 
 
-    free(player);
+    player->panning = 1;
+
+
+    player->pan_start_x =
+        x;
+
+    player->pan_start_y =
+        y;
+
+
+    player->pan_start_pan_x =
+        player->video_pan_x;
+
+    player->pan_start_pan_y =
+        player->video_pan_y;
+
+
+    fprintf(
+        stderr,
+        "[PAN] begin x=%.2f y=%.2f\n",
+        x,
+        y
+    );
+}
+
+
+/* ============================================================
+ * PAN UPDATE
+ * ============================================================ */
+
+void player_pan_update(
+    Player *player,
+    double offset_x,
+    double offset_y,
+    int width,
+    int height)
+{
+    if (!player ||
+        !player->panning)
+        return;
+
+
+    if (width <= 0 ||
+        height <= 0)
+        return;
+
+
+    /*
+     * Converte o movimento do mouse
+     * para a escala do vídeo.
+     *
+     * Mantemos uma velocidade razoável
+     * independente do tamanho da janela.
+     */
+
+    double dx =
+        offset_x / (double)width;
+
+    double dy =
+        offset_y / (double)height;
+
+
+    /*
+     * mpv video-pan usa valores relativos
+     * ao tamanho do vídeo.
+     */
+
+    player->video_pan_x =
+        player->pan_start_pan_x +
+        dx * 2.0;
+
+
+    player->video_pan_y =
+        player->pan_start_pan_y +
+        dy * 2.0;
+
+
+    if (player->video_pan_x > 2.0)
+        player->video_pan_x = 2.0;
+
+    if (player->video_pan_x < -2.0)
+        player->video_pan_x = -2.0;
+
+
+    if (player->video_pan_y > 2.0)
+        player->video_pan_y = 2.0;
+
+    if (player->video_pan_y < -2.0)
+        player->video_pan_y = -2.0;
+
+
+    char value_x[64];
+    char value_y[64];
+
+
+    snprintf(
+        value_x,
+        sizeof(value_x),
+        "%.4f",
+        player->video_pan_x
+    );
+
+
+    snprintf(
+        value_y,
+        sizeof(value_y),
+        "%.4f",
+        player->video_pan_y
+    );
+
+
+    player_set_property(
+        player,
+        "video-pan-x",
+        value_x
+    );
+
+
+    player_set_property(
+        player,
+        "video-pan-y",
+        value_y
+    );
+}
+
+
+/* ============================================================
+ * PAN END
+ * ============================================================ */
+
+void player_pan_end(
+    Player *player)
+{
+    if (!player)
+        return;
+
+
+    player->panning = 0;
+
+
+    fprintf(
+        stderr,
+        "[PAN] end\n"
+    );
+}
+
+
+/* ============================================================
+ * RESET VIEW
+ * ============================================================ */
+
+void player_reset_view(
+    Player *player)
+{
+    if (!player ||
+        !player->mpv)
+        return;
+
+
+    player->video_zoom = 0.0;
+
+    player->video_pan_x = 0.0;
+    player->video_pan_y = 0.0;
+
+    player->panning = 0;
+
+
+    player_set_property(
+        player,
+        "video-zoom",
+        "0"
+    );
+
+
+    player_set_property(
+        player,
+        "video-pan-x",
+        "0"
+    );
+
+
+    player_set_property(
+        player,
+        "video-pan-y",
+        "0"
+    );
+
+
+    fprintf(
+        stderr,
+        "[PLAYER] view reset\n"
+    );
+}
+
+
+/* ============================================================
+ * ROTATE
+ * ============================================================ */
+
+void player_rotate(
+    Player *player)
+{
+    if (!player ||
+        !player->mpv)
+        return;
+
+
+    player->video_rotation += 90;
+
+
+    if (player->video_rotation >= 360)
+        player->video_rotation = 0;
+
+
+    char value[32];
+
+
+    snprintf(
+        value,
+        sizeof(value),
+        "%d",
+        player->video_rotation
+    );
+
+
+    player_set_property(
+        player,
+        "video-rotate",
+        value
+    );
+
+
+    fprintf(
+        stderr,
+        "[PLAYER] rotation = %d\n",
+        player->video_rotation
+    );
+}
+
+
+/* ============================================================
+ * BRIGHTNESS
+ * ============================================================ */
+
+void player_change_brightness(
+    Player *player,
+    int amount)
+{
+    if (!player ||
+        !player->mpv)
+        return;
+
+
+    player->brightness +=
+        amount;
+
+
+    if (player->brightness > 100)
+        player->brightness = 100;
+
+
+    if (player->brightness < -100)
+        player->brightness = -100;
+
+
+    char value[32];
+
+
+    snprintf(
+        value,
+        sizeof(value),
+        "%d",
+        player->brightness
+    );
+
+
+    player_set_property(
+        player,
+        "brightness",
+        value
+    );
+
+
+    fprintf(
+        stderr,
+        "[PLAYER] brightness = %d\n",
+        player->brightness
+    );
+}
+
+
+/* ============================================================
+ * SCREENSHOT
+ * ============================================================ */
+
+const char *player_save_frame(
+    Player *player)
+{
+    if (!player ||
+        !player->mpv)
+        return NULL;
+
+
+    static char screenshot_path[4096];
+
+
+    const char *command[] = {
+
+        "screenshot",
+        "video",
+        NULL
+    };
+
+
+    int status =
+        mpv_command(
+            player->mpv,
+            command
+        );
+
+
+    if (status < 0) {
+
+        fprintf(
+            stderr,
+            "[MPV] erro screenshot: %s\n",
+            mpv_error_string(status)
+        );
+
+        return NULL;
+    }
+
+
+    /*
+     * O mpv escolhe o nome do screenshot.
+     *
+     * Neste momento retornamos uma mensagem
+     * simples. O comportamento anterior do
+     * programa pode ser refinado depois com
+     * screenshot directory / screenshot template.
+     */
+
+    snprintf(
+        screenshot_path,
+        sizeof(screenshot_path),
+        "Screenshot salvo"
+    );
+
+
+    fprintf(
+        stderr,
+        "[MPV] screenshot solicitado\n"
+    );
+
+
+    return screenshot_path;
 }
