@@ -4,7 +4,7 @@
 #include <gtk/gtk.h>
 
 #include <stdio.h>
-#include <string.h>
+#include <stdlib.h>
 
 
 /* ============================================================
@@ -80,12 +80,6 @@ static void show_message(
         message
     );
 
-
-    /*
-     * A estrutura Controls permanece viva durante
-     * toda a aplicação, então podemos usá-la
-     * novamente quando o timeout disparar.
-     */
 
     g_timeout_add(
         2000,
@@ -277,23 +271,31 @@ static gboolean on_key_pressed(
 
         if (player) {
 
-            player_save_frame(
-                player
-            );
+            const char *screenshot =
+                player_save_frame(
+                    player
+                );
 
 
-            /*
-             * Por enquanto usamos uma mensagem simples.
-             *
-             * Quando player_save_frame() passar a
-             * retornar o nome do arquivo salvo,
-             * podemos mostrar esse nome aqui.
-             */
+            if (screenshot) {
 
-            show_message(
-                controls,
-                "Screenshot salvo"
-            );
+                /*
+                 * Mostra exatamente o nome/caminho
+                 * retornado pelo mpv.
+                 */
+
+                show_message(
+                    controls,
+                    screenshot
+                );
+
+            } else {
+
+                show_message(
+                    controls,
+                    "Erro ao salvar screenshot"
+                );
+            }
         }
 
 
@@ -673,9 +675,6 @@ void controls_setup(
     /*
      * O Controls precisa permanecer vivo porque
      * os callbacks GTK usam este ponteiro.
-     *
-     * Ele é liberado junto com a aplicação pelo
-     * processo ao terminar.
      */
 
     Controls *controls =

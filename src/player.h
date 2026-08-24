@@ -139,7 +139,17 @@ void player_change_brightness(
  * SCREENSHOT
  * ============================================================ */
 
-void player_save_frame(
+/*
+ * Salva o frame e retorna o caminho do arquivo
+ * informado pelo próprio mpv.
+ *
+ * O ponteiro retornado pertence ao Player.
+ * Não deve ser liberado pelo chamador.
+ *
+ * Retorna NULL em caso de erro.
+ */
+
+const char *player_save_frame(
     Player *player
 );
 

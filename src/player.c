@@ -5,6 +5,7 @@
 #include <locale.h>
 #include <math.h>
 #include <libgen.h>
+#include <string.h>
 
 
 /* ============================================================
@@ -30,6 +31,15 @@ struct _Player {
 
     double pan_start_pan_x;
     double pan_start_pan_y;
+
+    /*
+     * Último screenshot salvo.
+     *
+     * O caminho é copiado para cá porque o mpv_node
+     * pertence ao resultado do comando e precisa ser
+     * liberado depois.
+     */
+    char last_screenshot[4096];
 };
 
 
@@ -48,6 +58,7 @@ Player *player_new(void)
     if (!player)
         return NULL;
 
+
     player->mpv = NULL;
 
     player->filename = NULL;
@@ -64,6 +75,8 @@ Player *player_new(void)
 
     player->pan_start_pan_x = 0.0;
     player->pan_start_pan_y = 0.0;
+
+    player->last_screenshot[0] = '\0';
 
     return player;
 }
@@ -501,6 +514,7 @@ void player_pan_begin(
     (void)x;
     (void)y;
 
+
     if (!player)
         return;
 
@@ -778,13 +792,13 @@ void player_change_brightness(
  * SCREENSHOT
  * ============================================================ */
 
-void player_save_frame(
+const char *player_save_frame(
     Player *player)
 {
     if (!player ||
         !player->mpv ||
         !player->filename)
-        return;
+        return NULL;
 
 
     char path[4096];
@@ -824,10 +838,17 @@ void player_save_frame(
     };
 
 
+    mpv_node result = {
+
+        .format = MPV_FORMAT_NONE
+    };
+
+
     int status =
-        mpv_command(
+        mpv_command_ret(
             player->mpv,
-            command
+            command,
+            &result
         );
 
 
@@ -839,13 +860,79 @@ void player_save_frame(
             mpv_error_string(status)
         );
 
-    } else {
-
-        fprintf(
-            stderr,
-            "[SCREENSHOT] OK\n"
-        );
+        return NULL;
     }
+
+
+    /*
+     * O comando screenshot retorna um MAP.
+     *
+     * Procuramos a chave:
+     *
+     *     filename
+     */
+
+    if (result.format ==
+        MPV_FORMAT_NODE_MAP &&
+        result.u.list) {
+
+        for (int i = 0;
+             i < result.u.list->num;
+             i++) {
+
+            const char *key =
+                result.u.list->keys[i];
+
+            mpv_node *value =
+                &result.u.list->values[i];
+
+
+            if (key &&
+                strcmp(
+                    key,
+                    "filename"
+                ) == 0 &&
+                value->format ==
+                    MPV_FORMAT_STRING &&
+                value->u.string) {
+
+                snprintf(
+                    player->last_screenshot,
+                    sizeof(player->last_screenshot),
+                    "%s",
+                    value->u.string
+                );
+
+                fprintf(
+                    stderr,
+                    "[SCREENSHOT] OK: %s\n",
+                    player->last_screenshot
+                );
+
+
+                mpv_free_node_contents(
+                    &result
+                );
+
+
+                return player->last_screenshot;
+            }
+        }
+    }
+
+
+    fprintf(
+        stderr,
+        "[SCREENSHOT] ERRO: mpv não retornou filename\n"
+    );
+
+
+    mpv_free_node_contents(
+        &result
+    );
+
+
+    return NULL;
 }
 
 
@@ -921,7 +1008,7 @@ void player_free(
 
 
     /*
-     * O mpv_render_context NÃO pertence mais
+     * O mpv_render_context NÃO pertence
      * ao Player.
      *
      * Ele é destruído pelo Render.
