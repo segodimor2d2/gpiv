@@ -43,14 +43,6 @@ static void on_activate(
         return;
     }
 
-
-    fprintf(
-        stderr,
-        "[APP] arquivo inicial = %s\n",
-        filename
-    );
-
-
     /* --------------------------------------------------------
      * RENDER
      * -------------------------------------------------------- */
@@ -212,11 +204,6 @@ int player_app_next(
 
     if (pa->current_index + 1 >= count) {
 
-        fprintf(
-            stderr,
-            "[APP] já está no último arquivo\n"
-        );
-
         return -1;
     }
 
@@ -257,18 +244,12 @@ int player_app_next(
     }
 
 
-    fprintf(
-        stderr,
-        "[APP] próximo arquivo\n"
-    );
-
-
-    fprintf(
-        stderr,
-        "[APP] índice: %zu -> %zu\n",
-        pa->current_index,
-        next_index
-    );
+    // fprintf(
+    //     stderr,
+    //     "[APP] índice: %zu -> %zu\n",
+    //     pa->current_index,
+    //     next_index
+    // );
 
 
     fprintf(
@@ -300,11 +281,11 @@ int player_app_next(
         next_index;
 
 
-    fprintf(
-        stderr,
-        "[APP] arquivo atual = %zu\n",
-        pa->current_index
-    );
+    // fprintf(
+    //     stderr,
+    //     "[APP] arquivo atual = %zu\n",
+    //     pa->current_index
+    // );
 
 
     return 0;
@@ -339,11 +320,6 @@ int player_app_previous(
      * -------------------------------------------------------- */
 
     if (pa->current_index == 0) {
-
-        fprintf(
-            stderr,
-            "[APP] já está no primeiro arquivo\n"
-        );
 
         return -1;
     }
@@ -385,18 +361,12 @@ int player_app_previous(
     }
 
 
-    fprintf(
-        stderr,
-        "[APP] arquivo anterior\n"
-    );
-
-
-    fprintf(
-        stderr,
-        "[APP] índice: %zu -> %zu\n",
-        pa->current_index,
-        previous_index
-    );
+    // fprintf(
+    //     stderr,
+    //     "[APP] índice: %zu -> %zu\n",
+    //     pa->current_index,
+    //     previous_index
+    // );
 
 
     fprintf(
@@ -428,11 +398,11 @@ int player_app_previous(
         previous_index;
 
 
-    fprintf(
-        stderr,
-        "[APP] arquivo atual = %zu\n",
-        pa->current_index
-    );
+    // fprintf(
+    //     stderr,
+    //     "[APP] arquivo atual = %zu\n",
+    //     pa->current_index
+    // );
 
 
     return 0;
@@ -494,11 +464,11 @@ PlayerApp *player_app_new(
     );
 
 
-    fprintf(
-        stderr,
-        "[APP] current_index = %zu\n",
-        pa->current_index
-    );
+    // fprintf(
+    //     stderr,
+    //     "[APP] current_index = %zu\n",
+    //     pa->current_index
+    // );
 
 
     fprintf(

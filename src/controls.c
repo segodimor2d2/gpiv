@@ -142,13 +142,6 @@ static void copy_video_path(
     );
 
 
-    fprintf(
-        stderr,
-        "[CLIPBOARD] copiado: %s\n",
-        filename
-    );
-
-
     show_message(
         controls,
         "Path copiado"
@@ -191,10 +184,6 @@ static void previous_file(
         }
 
 
-        fprintf(
-            stderr,
-            "[KEY] arquivo anterior carregado\n"
-        );
 
     } else {
 
@@ -241,11 +230,6 @@ static void next_file(
         }
 
 
-        fprintf(
-            stderr,
-            "[KEY] próximo arquivo carregado\n"
-        );
-
     } else {
 
         show_message(
@@ -275,14 +259,6 @@ static gboolean on_key_pressed(
     if (!controls)
         return FALSE;
 
-
-    fprintf(
-        stderr,
-        "[KEY] keyval=0x%x\n",
-        keyval
-    );
-
-
     Player *player = NULL;
 
 
@@ -302,11 +278,6 @@ static gboolean on_key_pressed(
 
     if (keyval == GDK_KEY_q ||
         keyval == GDK_KEY_Q) {
-
-        fprintf(
-            stderr,
-            "[KEY] Q DETECTADO -> saindo\n"
-        );
 
 
         if (controls->window) {
@@ -740,67 +711,6 @@ static gboolean grab_gl_focus(
     return G_SOURCE_REMOVE;
 }
 
-
-/* ============================================================
- * WINDOW REALIZE
- * ============================================================ */
-
-static void on_window_realize(
-    GtkWindow *window,
-    Controls *controls)
-{
-    (void)controls;
-
-
-    fprintf(
-        stderr,
-        "[window] REALIZE\n"
-    );
-
-
-    fprintf(
-        stderr,
-        "[window] visible=%d mapped=%d\n",
-        gtk_widget_get_visible(
-            GTK_WIDGET(window)
-        ),
-        gtk_widget_get_mapped(
-            GTK_WIDGET(window)
-        )
-    );
-}
-
-
-/* ============================================================
- * WINDOW MAP
- * ============================================================ */
-
-static void on_window_map(
-    GtkWindow *window,
-    Controls *controls)
-{
-    (void)controls;
-
-
-    fprintf(
-        stderr,
-        "[window] MAP\n"
-    );
-
-
-    fprintf(
-        stderr,
-        "[window] visible=%d mapped=%d\n",
-        gtk_widget_get_visible(
-            GTK_WIDGET(window)
-        ),
-        gtk_widget_get_mapped(
-            GTK_WIDGET(window)
-        )
-    );
-}
-
-
 /* ============================================================
  * SETUP
  * ============================================================ */
@@ -957,27 +867,6 @@ void controls_setup(
         window,
         GTK_EVENT_CONTROLLER(key_controller)
     );
-
-
-    /* --------------------------------------------------------
-     * WINDOW SIGNALS
-     * -------------------------------------------------------- */
-
-    g_signal_connect(
-        window,
-        "realize",
-        G_CALLBACK(on_window_realize),
-        controls
-    );
-
-
-    g_signal_connect(
-        window,
-        "map",
-        G_CALLBACK(on_window_map),
-        controls
-    );
-
 
     /* --------------------------------------------------------
      * FOCO INICIAL

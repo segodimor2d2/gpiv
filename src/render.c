@@ -251,11 +251,6 @@ static void on_gl_realize(
     GtkGLArea *area,
     Render *render)
 {
-    fprintf(
-        stderr,
-        "[GL] REALIZE GtkGLArea\n"
-    );
-
 
     gtk_gl_area_make_current(
         area
@@ -630,13 +625,6 @@ static gboolean on_gl_render(
     Render *render)
 {
     (void)ctx;
-
-
-    fprintf(
-        stderr,
-        "[GL] RENDER\n"
-    );
-
 
     int width =
         gtk_widget_get_width(

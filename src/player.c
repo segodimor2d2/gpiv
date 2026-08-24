@@ -402,14 +402,6 @@ int player_load_file(
         !filename)
         return -1;
 
-
-    fprintf(
-        stderr,
-        "[PLAYER] load file: %s\n",
-        filename
-    );
-
-
     const char *command[] = {
 
         "loadfile",
@@ -508,14 +500,6 @@ int player_load_file(
         "video-pan-y",
         "0"
     );
-
-
-    fprintf(
-        stderr,
-        "[MPV] arquivo carregado: %s\n",
-        filename
-    );
-
 
     return 0;
 }
@@ -703,12 +687,6 @@ void player_change_zoom(
         value
     );
 
-
-    fprintf(
-        stderr,
-        "[PLAYER] zoom = %.3f\n",
-        player->video_zoom
-    );
 }
 
 
@@ -924,11 +902,6 @@ void player_reset_view(
         "0"
     );
 
-
-    fprintf(
-        stderr,
-        "[PLAYER] view reset\n"
-    );
 }
 
 
@@ -968,12 +941,6 @@ void player_rotate(
         value
     );
 
-
-    fprintf(
-        stderr,
-        "[PLAYER] rotation = %d\n",
-        player->video_rotation
-    );
 }
 
 
@@ -1019,12 +986,6 @@ void player_change_brightness(
         value
     );
 
-
-    fprintf(
-        stderr,
-        "[PLAYER] brightness = %d\n",
-        player->brightness
-    );
 }
 
 
