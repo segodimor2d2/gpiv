@@ -462,11 +462,10 @@ static gboolean on_key_pressed(
     }
 
     /* --------------------------------------------------------
-     * n -> FRAME ANTERIOR
+     * . -> FRAME ANTERIOR
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_n ||
-        keyval == GDK_KEY_N) {
+    if (keyval == GDK_KEY_period) {
 
         if (player) {
 
@@ -481,10 +480,10 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * . -> PRÓXIMO FRAME
+     * n -> PRÓXIMO FRAME
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_period) {
+    if (keyval == GDK_KEY_n || keyval == GDK_KEY_N) {
 
         if (player) {
 
