@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <limits.h>
 
 
 /* ============================================================
@@ -1152,16 +1154,195 @@ const char *player_save_frame(
     Player *player)
 {
     if (!player ||
-        !player->mpv)
+        !player->mpv ||
+        !player->filename)
         return NULL;
 
 
-    static char screenshot_path[4096];
+    /*
+     * Buffer estático para retornar o caminho
+     * para controls.c.
+     */
+    static char screenshot_path[PATH_MAX];
 
+
+    /*
+     * --------------------------------------------------------
+     * SEPARA DIRETÓRIO E NOME DO VÍDEO
+     * --------------------------------------------------------
+     */
+
+    const char *filename =
+        player->filename;
+
+
+    const char *slash =
+        strrchr(
+            filename,
+            '/'
+        );
+
+
+    char directory[PATH_MAX];
+    char basename[PATH_MAX];
+
+
+    if (slash) {
+
+        size_t dir_len =
+            (size_t)(slash - filename);
+
+
+        if (dir_len >= sizeof(directory))
+            return NULL;
+
+
+        memcpy(
+            directory,
+            filename,
+            dir_len
+        );
+
+
+        directory[dir_len] =
+            '\0';
+
+
+        snprintf(
+            basename,
+            sizeof(basename),
+            "%s",
+            slash + 1
+        );
+
+    } else {
+
+        /*
+         * Arquivo sem '/'.
+         * Nesse caso usamos o diretório atual.
+         */
+
+        snprintf(
+            directory,
+            sizeof(directory),
+            "."
+        );
+
+
+        snprintf(
+            basename,
+            sizeof(basename),
+            "%s",
+            filename
+        );
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * REMOVE EXTENSÃO DO VÍDEO
+     * --------------------------------------------------------
+     */
+
+    char *dot =
+        strrchr(
+            basename,
+            '.'
+        );
+
+
+    if (dot &&
+        dot != basename) {
+
+        *dot =
+            '\0';
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * PROCURA UM NOME LIVRE
+     * --------------------------------------------------------
+     *
+     * Exemplo:
+     *
+     * video-0001.png
+     * video-0002.png
+     * video-0003.png
+     *
+     */
+
+    int number;
+
+
+    for (number = 1;
+         number <= 9999;
+         number++) {
+
+        int written =
+            snprintf(
+                screenshot_path,
+                sizeof(screenshot_path),
+                "%s/%s-%04d.png",
+                directory,
+                basename,
+                number
+            );
+
+
+        /*
+         * O caminho não coube no buffer.
+         */
+        if (written < 0 ||
+            (size_t)written >= sizeof(screenshot_path)) {
+
+            fprintf(
+                stderr,
+                "[MPV] ERRO: caminho do screenshot muito longo\n"
+            );
+
+            return NULL;
+        }
+
+
+        /*
+         * Encontramos um nome que ainda não existe.
+         */
+        if (access(
+                screenshot_path,
+                F_OK
+            ) != 0) {
+
+            break;
+        }
+    }
+
+
+    if (number > 9999) {
+
+        fprintf(
+            stderr,
+            "[MPV] ERRO: não foi possível encontrar nome para screenshot\n"
+        );
+
+
+        return NULL;
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * SCREENSHOT-TO-FILE
+     * --------------------------------------------------------
+     *
+     * Diferentemente de "screenshot", aqui nós
+     * passamos explicitamente o arquivo de destino.
+     */
 
     const char *command[] = {
 
-        "screenshot",
+        "screenshot-to-file",
+        screenshot_path,
         "video",
         NULL
     };
@@ -1182,29 +1363,15 @@ const char *player_save_frame(
             mpv_error_string(status)
         );
 
+
         return NULL;
     }
 
 
-    /*
-     * O mpv escolhe o nome do screenshot.
-     *
-     * Neste momento retornamos uma mensagem
-     * simples. O comportamento anterior do
-     * programa pode ser refinado depois com
-     * screenshot directory / screenshot template.
-     */
-
-    snprintf(
-        screenshot_path,
-        sizeof(screenshot_path),
-        "Screenshot salvo"
-    );
-
-
     fprintf(
         stderr,
-        "[MPV] screenshot solicitado\n"
+        "[MPV] screenshot salvo: %s\n",
+        screenshot_path
     );
 
 

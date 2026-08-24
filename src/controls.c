@@ -643,9 +643,20 @@ static gboolean on_key_pressed(
 
             if (screenshot) {
 
+                char message[4096];
+
+
+                snprintf(
+                    message,
+                    sizeof(message),
+                    "Salvo: %s",
+                    screenshot
+                );
+
+
                 show_message(
                     controls,
-                    screenshot
+                    message
                 );
 
             } else {
