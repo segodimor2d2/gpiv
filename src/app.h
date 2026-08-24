@@ -16,7 +16,12 @@ typedef struct _PlayerApp {
 
     Render *render;
 
-    const char *filename;
+    /*
+     * Arquivo atualmente reproduzido.
+     *
+     * O PlayerApp possui sua própria cópia.
+     */
+    char *filename;
 
 } PlayerApp;
 

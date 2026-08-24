@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 
 /* ============================================================
@@ -129,6 +130,10 @@ static void on_activate(
 PlayerApp *player_app_new(
     const char *filename)
 {
+    if (!filename)
+        return NULL;
+
+
     PlayerApp *pa =
         calloc(
             1,
@@ -140,11 +145,40 @@ PlayerApp *player_app_new(
         return NULL;
 
 
+    /*
+     * O PlayerApp passa a ser dono
+     * da string filename.
+     */
+
+    pa->filename =
+        strdup(filename);
+
+
+    if (!pa->filename) {
+
+        free(pa);
+
+        return NULL;
+    }
+
+
     pa->app = NULL;
     pa->window = NULL;
     pa->info_label = NULL;
     pa->render = NULL;
-    pa->filename = filename;
+
+
+    fprintf(
+        stderr,
+        "[APP] PlayerApp criado\n"
+    );
+
+
+    fprintf(
+        stderr,
+        "[APP] filename = %s\n",
+        pa->filename
+    );
 
 
     return pa;
@@ -169,6 +203,17 @@ int player_app_run(
             "dev.local.gpiv-test",
             G_APPLICATION_NON_UNIQUE
         );
+
+
+    if (!pa->app) {
+
+        fprintf(
+            stderr,
+            "[APP] ERRO criando GtkApplication\n"
+        );
+
+        return EXIT_FAILURE;
+    }
 
 
     g_signal_connect(
@@ -227,6 +272,10 @@ void player_app_free(
         return;
 
 
+    /* --------------------------------------------------------
+     * RENDER
+     * -------------------------------------------------------- */
+
     if (pa->render) {
 
         render_free(
@@ -235,6 +284,32 @@ void player_app_free(
 
 
         pa->render = NULL;
+    }
+
+
+    /* --------------------------------------------------------
+     * FILENAME
+     * -------------------------------------------------------- */
+
+    free(
+        pa->filename
+    );
+
+
+    pa->filename = NULL;
+
+
+    /* --------------------------------------------------------
+     * APP
+     * -------------------------------------------------------- */
+
+    if (pa->app) {
+
+        g_object_unref(
+            pa->app
+        );
+
+        pa->app = NULL;
     }
 
 
