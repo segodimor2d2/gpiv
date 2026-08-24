@@ -293,36 +293,31 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * H -> ARQUIVO ANTERIOR
+     * K -> ARQUIVO ANTERIOR
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_h ||
-        keyval == GDK_KEY_H) {
+    if (keyval == GDK_KEY_k) {
 
         previous_file(
             controls
         );
-
 
         return TRUE;
     }
 
 
     /* --------------------------------------------------------
-     * L -> PRÓXIMO ARQUIVO
+     * J -> PRÓXIMO ARQUIVO
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_l ||
-        keyval == GDK_KEY_L) {
+    if (keyval == GDK_KEY_j) {
 
         next_file(
             controls
         );
 
-
         return TRUE;
     }
-
 
     /* --------------------------------------------------------
      * SPACE / ENTER -> PAUSE / PLAY
@@ -338,17 +333,15 @@ static gboolean on_key_pressed(
             );
         }
 
-
         return TRUE;
     }
 
-
     /* --------------------------------------------------------
-     * K -> FRAME ANTERIOR
+     * n -> FRAME ANTERIOR
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_k ||
-        keyval == GDK_KEY_K) {
+    if (keyval == GDK_KEY_n ||
+        keyval == GDK_KEY_N) {
 
         if (player) {
 
@@ -363,11 +356,10 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * J -> PRÓXIMO FRAME
+     * . -> PRÓXIMO FRAME
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_j ||
-        keyval == GDK_KEY_J) {
+    if (keyval == GDK_KEY_period) {
 
         if (player) {
 
@@ -435,7 +427,6 @@ static gboolean on_key_pressed(
         return TRUE;
     }
 
-
     /* --------------------------------------------------------
      * C -> VOLUME -
      * -------------------------------------------------------- */
@@ -448,6 +439,25 @@ static gboolean on_key_pressed(
             player_change_volume(
                 player,
                 -5
+            );
+        }
+
+
+        return TRUE;
+    }
+
+    /* --------------------------------------------------------
+     * x -> VOLUME 0
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_x ||
+        keyval == GDK_KEY_X) {
+
+        if (player) {
+
+            player_change_volume(
+                player,
+                -200
             );
         }
 
@@ -537,7 +547,7 @@ static gboolean on_key_pressed(
 
             player_change_brightness(
                 player,
-                5
+                1
             );
         }
 
@@ -557,7 +567,7 @@ static gboolean on_key_pressed(
 
             player_change_brightness(
                 player,
-                -5
+                -1
             );
         }
 
@@ -567,10 +577,10 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * 0 -> RESET ZOOM / PAN
+     * z -> RESET ZOOM / PAN
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_0) {
+    if (keyval == GDK_KEY_z) {
 
         if (player) {
 
