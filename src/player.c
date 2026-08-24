@@ -39,6 +39,12 @@ struct _Player {
 
     int panning;
 
+    /*
+     * Estado do áudio.
+     */
+
+    int volume;
+
     double pan_start_x;
     double pan_start_y;
 
@@ -122,6 +128,8 @@ Player *player_new(void)
 
     player->brightness = 0;
 
+    player->volume = 100;
+
     player->video_zoom = 0.0;
 
     player->video_pan_x = 0.0;
@@ -134,7 +142,6 @@ Player *player_new(void)
 
     player->pan_start_pan_x = 0.0;
     player->pan_start_pan_y = 0.0;
-
 
     return player;
 }
@@ -711,6 +718,55 @@ void player_seek_backward(
     }
 }
 
+/* ============================================================
+ * VOLUME
+ * ============================================================ */
+
+void player_change_volume(
+    Player *player,
+    int amount)
+{
+    if (!player ||
+        !player->mpv)
+        return;
+
+
+    player->volume +=
+        amount;
+
+
+    if (player->volume > 300)
+        player->volume = 300;
+
+
+    if (player->volume < 0)
+        player->volume = 0;
+
+
+    char value[32];
+
+
+    snprintf(
+        value,
+        sizeof(value),
+        "%d",
+        player->volume
+    );
+
+
+    player_set_property(
+        player,
+        "volume",
+        value
+    );
+
+
+    fprintf(
+        stderr,
+        "[MPV] volume = %d\n",
+        player->volume
+    );
+}
 
 /* ============================================================
  * ZOOM
