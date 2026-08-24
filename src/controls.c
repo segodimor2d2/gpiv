@@ -8,6 +8,13 @@
 
 
 /* ============================================================
+ * CONFIGURAÇÃO
+ * ============================================================ */
+
+#define FILE_JUMP 20
+#define SEEK_SECONDS 5
+
+/* ============================================================
  * CONTEXTO INTERNO
  * ============================================================ */
 
@@ -148,6 +155,95 @@ static void copy_video_path(
     );
 }
 
+
+/* ============================================================
+ * SALTO PARA FRENTE
+ * ============================================================ */
+
+static void jump_forward(
+    Controls *controls)
+{
+    if (!controls ||
+        !controls->app)
+        return;
+
+
+    int status =
+        player_app_jump(
+            controls->app,
+            FILE_JUMP
+        );
+
+
+    if (status == 0) {
+
+        const char *filename =
+            player_app_get_filename(
+                controls->app
+            );
+
+
+        if (filename) {
+
+            gtk_label_set_text(
+                GTK_LABEL(controls->info_label),
+                filename
+            );
+        }
+
+    } else {
+
+        show_message(
+            controls,
+            "Não há arquivos suficientes"
+        );
+    }
+}
+
+
+/* ============================================================
+ * SALTO PARA TRÁS
+ * ============================================================ */
+
+static void jump_backward(
+    Controls *controls)
+{
+    if (!controls ||
+        !controls->app)
+        return;
+
+
+    int status =
+        player_app_jump(
+            controls->app,
+            -(int)FILE_JUMP
+        );
+
+
+    if (status == 0) {
+
+        const char *filename =
+            player_app_get_filename(
+                controls->app
+            );
+
+
+        if (filename) {
+
+            gtk_label_set_text(
+                GTK_LABEL(controls->info_label),
+                filename
+            );
+        }
+
+    } else {
+
+        show_message(
+            controls,
+            "Não há arquivos suficientes"
+        );
+    }
+}
 
 /* ============================================================
  * ARQUIVO ANTERIOR
@@ -319,6 +415,34 @@ static gboolean on_key_pressed(
         return TRUE;
     }
 
+
+    /* --------------------------------------------------------
+     * K MAIÚSCULO -> RETROCEDE FILE_JUMP ARQUIVOS
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_K) {
+
+        jump_backward(
+            controls
+        );
+
+        return TRUE;
+    }
+
+
+    /* --------------------------------------------------------
+     * J MAIÚSCULO -> AVANÇA FILE_JUMP ARQUIVOS
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_J) {
+
+        jump_forward(
+            controls
+        );
+
+        return TRUE;
+    }
+
     /* --------------------------------------------------------
      * SPACE / ENTER -> PAUSE / PLAY
      * -------------------------------------------------------- */
@@ -376,16 +500,15 @@ static gboolean on_key_pressed(
      * M -> AVANÇA 10 SEGUNDOS
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_m ||
-        keyval == GDK_KEY_M) {
+    if (keyval == GDK_KEY_m) {
 
         if (player) {
 
             player_seek_forward(
-                player
+                player,
+                SEEK_SECONDS
             );
         }
-
 
         return TRUE;
     }
@@ -400,7 +523,8 @@ static gboolean on_key_pressed(
         if (player) {
 
             player_seek_backward(
-                player
+                player,
+                SEEK_SECONDS
             );
         }
 

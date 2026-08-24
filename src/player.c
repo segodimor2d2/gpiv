@@ -646,17 +646,28 @@ void player_frame_forward(
  * ============================================================ */
 
 void player_seek_forward(
-    Player *player)
+    Player *player,
+    int seconds)
 {
     if (!player ||
         !player->mpv)
         return;
 
 
+    char seconds_str[32];
+
+    snprintf(
+        seconds_str,
+        sizeof(seconds_str),
+        "%d",
+        seconds
+    );
+
+
     const char *command[] = {
 
         "seek",
-        "10",
+        seconds_str,
         "relative",
         NULL
     };
@@ -685,17 +696,28 @@ void player_seek_forward(
  * ============================================================ */
 
 void player_seek_backward(
-    Player *player)
+    Player *player,
+    int seconds)
 {
     if (!player ||
         !player->mpv)
         return;
 
 
+    char seconds_str[32];
+
+    snprintf(
+        seconds_str,
+        sizeof(seconds_str),
+        "-%d",
+        seconds
+    );
+
+
     const char *command[] = {
 
         "seek",
-        "-10",
+        seconds_str,
         "relative",
         NULL
     };

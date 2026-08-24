@@ -89,6 +89,23 @@ int player_app_previous(
 
 
 /*
+ * Salta vários arquivos na FileList.
+ *
+ * delta > 0 -> avança
+ * delta < 0 -> retrocede
+ *
+ * Retorna:
+ *
+ *      0 -> sucesso
+ *     -1 -> não foi possível mudar
+ */
+int player_app_jump(
+    PlayerApp *pa,
+    int delta
+);
+
+
+/*
  * Retorna o arquivo atualmente selecionado.
  *
  * O ponteiro pertence à FileList.

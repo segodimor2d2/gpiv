@@ -176,6 +176,127 @@ size_t player_app_get_current_index(
 
 
 /* ============================================================
+ * JUMP
+ * ============================================================ */
+
+int player_app_jump(
+    PlayerApp *pa,
+    int delta)
+{
+    if (!pa ||
+        !pa->filelist ||
+        !pa->render)
+        return -1;
+
+
+    size_t count =
+        filelist_count(
+            pa->filelist
+        );
+
+
+    if (count == 0)
+        return -1;
+
+
+    /*
+     * Calcula o novo índice usando
+     * aritmética assinada para evitar
+     * problemas com size_t.
+     */
+
+    long new_index =
+        (long)pa->current_index +
+        delta;
+
+
+    /*
+     * Não permite passar do primeiro
+     * ou do último arquivo.
+     */
+
+    if (new_index < 0)
+        return -1;
+
+
+    if ((size_t)new_index >= count)
+        return -1;
+
+
+    const char *filename =
+        filelist_get(
+            pa->filelist,
+            (size_t)new_index
+        );
+
+
+    if (!filename)
+        return -1;
+
+
+    /* --------------------------------------------------------
+     * PLAYER
+     * -------------------------------------------------------- */
+
+    Player *player =
+        render_get_player(
+            pa->render
+        );
+
+
+    if (!player) {
+
+        fprintf(
+            stderr,
+            "[APP] Player NULL\n"
+        );
+
+        return -1;
+    }
+
+
+    fprintf(
+        stderr,
+        "[APP] salto: %zu -> %zu\n",
+        pa->current_index,
+        (size_t)new_index
+    );
+
+
+    fprintf(
+        stderr,
+        "[APP] arquivo: %s\n",
+        filename
+    );
+
+
+    int status =
+        player_load_file(
+            player,
+            filename
+        );
+
+
+    if (status < 0) {
+
+        fprintf(
+            stderr,
+            "[APP] ERRO carregando arquivo\n"
+        );
+
+        return -1;
+    }
+
+
+    pa->current_index =
+        (size_t)new_index;
+
+
+    return 0;
+}
+
+
+/* ============================================================
  * NEXT
  * ============================================================ */
 

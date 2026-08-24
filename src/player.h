@@ -84,11 +84,13 @@ void player_frame_forward(
  * ============================================================ */
 
 void player_seek_forward(
-    Player *player
+    Player *player,
+    int seconds
 );
 
 void player_seek_backward(
-    Player *player
+    Player *player,
+    int seconds
 );
 
 /* ============================================================
