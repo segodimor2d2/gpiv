@@ -12,7 +12,8 @@
  * ============================================================ */
 
 #define FILE_JUMP 20
-#define SEEK_SECONDS 5
+#define SEEK_SECONDS 3
+#define SEEK_HARD_SECONDS 10
 
 /* ============================================================
  * CONTEXTO INTERNO
@@ -417,10 +418,10 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * K MAIÚSCULO -> RETROCEDE FILE_JUMP ARQUIVOS
+     * l MAIÚSCULO -> RETROCEDE FILE_JUMP ARQUIVOS
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_K) {
+    if (keyval == GDK_KEY_l) {
 
         jump_backward(
             controls
@@ -431,10 +432,10 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * J MAIÚSCULO -> AVANÇA FILE_JUMP ARQUIVOS
+     * h MAIÚSCULO -> AVANÇA FILE_JUMP ARQUIVOS
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_J) {
+    if (keyval == GDK_KEY_h) {
 
         jump_forward(
             controls
@@ -497,7 +498,43 @@ static gboolean on_key_pressed(
     }
 
     /* --------------------------------------------------------
-     * M -> AVANÇA 10 SEGUNDOS
+     * M -> SEEK_HARD_SECONDS SEGUNDOS
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_M) {
+
+        if (player) {
+
+            player_seek_forward(
+                player,
+                SEEK_HARD_SECONDS
+            );
+        }
+
+        return TRUE;
+    }
+
+
+    /* --------------------------------------------------------
+     * < -> SEEK_HARD_SECONDS SEGUNDOS
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_less) {
+
+        if (player) {
+
+            player_seek_backward(
+                player,
+                SEEK_HARD_SECONDS
+            );
+        }
+
+
+        return TRUE;
+    }
+
+    /* --------------------------------------------------------
+     * m -> AVANÇA SEGUNDOS
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_m) {
@@ -515,7 +552,7 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * , -> RETROCEDE 10 SEGUNDOS
+     * , -> RETROCEDE SEGUNDOS
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_comma) {
