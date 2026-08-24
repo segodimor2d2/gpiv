@@ -55,9 +55,11 @@ int main(
      * ./gpiv
      * ./gpiv -n
      * ./gpiv -t
+     * ./gpiv -T
      * ./gpiv /home/segodimo/videos/
      * ./gpiv /home/segodimo/videos/tst2.mp4
      */
+
 
     for (int i = 1;
          i < argc;
@@ -79,12 +81,31 @@ int main(
 
 
         /* -----------------------------------------------
-         * -t -> tempo
+         * -t -> tempo invertido
+         *
+         * Mais recente -> mais antigo
          * ----------------------------------------------- */
 
         if (strcmp(
                 argv[i],
                 "-t") == 0) {
+
+            order =
+                FILELIST_ORDER_TIME_REVERSE;
+
+            continue;
+        }
+
+
+        /* -----------------------------------------------
+         * -T -> tempo original
+         *
+         * Mais antigo -> mais recente
+         * ----------------------------------------------- */
+
+        if (strcmp(
+                argv[i],
+                "-T") == 0) {
 
             order =
                 FILELIST_ORDER_TIME;

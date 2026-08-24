@@ -634,6 +634,83 @@ void player_frame_forward(
     );
 }
 
+/* ============================================================
+ * SEEK FORWARD
+ * ============================================================ */
+
+void player_seek_forward(
+    Player *player)
+{
+    if (!player ||
+        !player->mpv)
+        return;
+
+
+    const char *command[] = {
+
+        "seek",
+        "10",
+        "relative",
+        NULL
+    };
+
+
+    int status =
+        mpv_command(
+            player->mpv,
+            command
+        );
+
+
+    if (status < 0) {
+
+        fprintf(
+            stderr,
+            "[MPV] erro seek forward: %s\n",
+            mpv_error_string(status)
+        );
+    }
+}
+
+
+/* ============================================================
+ * SEEK BACKWARD
+ * ============================================================ */
+
+void player_seek_backward(
+    Player *player)
+{
+    if (!player ||
+        !player->mpv)
+        return;
+
+
+    const char *command[] = {
+
+        "seek",
+        "-10",
+        "relative",
+        NULL
+    };
+
+
+    int status =
+        mpv_command(
+            player->mpv,
+            command
+        );
+
+
+    if (status < 0) {
+
+        fprintf(
+            stderr,
+            "[MPV] erro seek backward: %s\n",
+            mpv_error_string(status)
+        );
+    }
+}
+
 
 /* ============================================================
  * ZOOM

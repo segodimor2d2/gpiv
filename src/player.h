@@ -79,6 +79,18 @@ void player_frame_forward(
     Player *player
 );
 
+/* ============================================================
+ * SEEK
+ * ============================================================ */
+
+void player_seek_forward(
+    Player *player
+);
+
+void player_seek_backward(
+    Player *player
+);
+
 
 /* ============================================================
  * ZOOM

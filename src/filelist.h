@@ -15,8 +15,14 @@ typedef struct _FileList FileList;
 typedef enum {
 
     FILELIST_ORDER_DEFAULT,
+
     FILELIST_ORDER_NAME,
-    FILELIST_ORDER_TIME
+
+    /* Mais antigo -> mais recente */
+    FILELIST_ORDER_TIME,
+
+    /* Mais recente -> mais antigo */
+    FILELIST_ORDER_TIME_REVERSE
 
 } FileListOrder;
 

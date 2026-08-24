@@ -327,10 +327,54 @@ static int compare_time(
         return 1;
 
 
+    /*
+     * Mantém o mesmo critério de desempate
+     * da ordenação original.
+     */
+
     return strcmp(
         fa->path,
         fb->path
     );
+}
+
+
+/* ============================================================
+ * INVERTE LISTA
+ * ============================================================ */
+
+static void filelist_reverse(
+    FileList *list)
+{
+    if (!list ||
+        list->count < 2)
+        return;
+
+
+    size_t left = 0;
+
+    size_t right =
+        list->count - 1;
+
+
+    while (left < right) {
+
+        FileItem temp =
+            list->items[left];
+
+
+        list->items[left] =
+            list->items[right];
+
+
+        list->items[right] =
+            temp;
+
+
+        left++;
+
+        right--;
+    }
 }
 
 
@@ -349,6 +393,10 @@ void filelist_sort(
 
     switch (order) {
 
+        /* -----------------------------------------------
+         * NOME
+         * ----------------------------------------------- */
+
         case FILELIST_ORDER_NAME:
 
             qsort(
@@ -361,6 +409,16 @@ void filelist_sort(
             break;
 
 
+        /* -----------------------------------------------
+         * TEMPO ORIGINAL
+         *
+         * Mais antigo -> mais recente
+         *
+         * Usado por:
+         *
+         *     -T
+         * ----------------------------------------------- */
+
         case FILELIST_ORDER_TIME:
 
             qsort(
@@ -372,6 +430,39 @@ void filelist_sort(
 
             break;
 
+
+        /* -----------------------------------------------
+         * TEMPO INVERTIDO
+         *
+         * É exatamente a ordem de TIME
+         * invertida.
+         *
+         * Mais recente -> mais antigo
+         *
+         * Usado por:
+         *
+         *     -t
+         * ----------------------------------------------- */
+
+        case FILELIST_ORDER_TIME_REVERSE:
+
+            qsort(
+                list->items,
+                list->count,
+                sizeof(FileItem),
+                compare_time
+            );
+
+            filelist_reverse(
+                list
+            );
+
+            break;
+
+
+        /* -----------------------------------------------
+         * DEFAULT
+         * ----------------------------------------------- */
 
         case FILELIST_ORDER_DEFAULT:
 

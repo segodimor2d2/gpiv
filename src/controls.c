@@ -325,10 +325,11 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * SPACE -> PAUSE / PLAY
+     * SPACE / ENTER -> PAUSE / PLAY
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_space) {
+    if (keyval == GDK_KEY_space ||
+        keyval == GDK_KEY_Return) {
 
         if (player) {
 
@@ -379,6 +380,41 @@ static gboolean on_key_pressed(
         return TRUE;
     }
 
+    /* --------------------------------------------------------
+     * M -> AVANÇA 10 SEGUNDOS
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_m ||
+        keyval == GDK_KEY_M) {
+
+        if (player) {
+
+            player_seek_forward(
+                player
+            );
+        }
+
+
+        return TRUE;
+    }
+
+
+    /* --------------------------------------------------------
+     * , -> RETROCEDE 10 SEGUNDOS
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_comma) {
+
+        if (player) {
+
+            player_seek_backward(
+                player
+            );
+        }
+
+
+        return TRUE;
+    }
 
     /* --------------------------------------------------------
      * S -> SCREENSHOT
