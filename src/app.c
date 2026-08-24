@@ -251,9 +251,26 @@ static gboolean on_key_pressed(
     if (keyval == GDK_KEY_s ||
         keyval == GDK_KEY_S) {
 
-        if (player)
-            player_save_frame(player);
+        if (player) {
 
+            player_save_frame(
+                player
+            );
+
+            if (pa->info_label) {
+
+                gtk_label_set_text(
+                    GTK_LABEL(pa->info_label),
+                    "Screenshot salvo"
+                );
+
+                g_timeout_add(
+                    2000,
+                    restore_info_label,
+                    pa
+                );
+            }
+        }
 
         return TRUE;
     }
