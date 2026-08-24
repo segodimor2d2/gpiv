@@ -791,7 +791,7 @@ static gboolean on_scroll(
 
     player_change_zoom(
         player,
-        dy
+        -dy
     );
 
 
