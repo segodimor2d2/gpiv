@@ -53,6 +53,40 @@ int player_load_file(
     const char *filename
 );
 
+/* ============================================================
+ * INFORMAÇÕES DO VÍDEO
+ * ============================================================ */
+
+/*
+ * Retorna a posição atual e a duração total em segundos.
+ *
+ * position:
+ *     tempo atual do vídeo
+ *
+ * duration:
+ *     duração total do vídeo
+ *
+ * Retorna:
+ *     0  = sucesso
+ *    -1  = erro
+ */
+int player_get_time(
+    Player *player,
+    double *position,
+    double *duration
+);
+
+
+/*
+ * Retorna o nome/path do arquivo atualmente reproduzido.
+ *
+ * A string pertence ao PlayerApp/FileList.
+ * Não deve ser liberada pelo chamador.
+ */
+const char *player_get_filename(
+    Player *player
+);
+
 
 /* ============================================================
  * EVENTOS

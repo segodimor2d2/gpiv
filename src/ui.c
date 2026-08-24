@@ -143,6 +143,21 @@ GtkWidget *ui_create_window(
     GtkWidget *label =
         gtk_label_new(NULL);
 
+    gtk_label_set_xalign(
+        GTK_LABEL(label),
+        0.0
+    );
+
+    gtk_label_set_yalign(
+        GTK_LABEL(label),
+        0.0
+    );
+
+    gtk_label_set_wrap(
+        GTK_LABEL(label),
+        TRUE
+    );
+
 
     gtk_widget_add_css_class(
         label,
@@ -168,9 +183,8 @@ GtkWidget *ui_create_window(
 
     gtk_widget_set_halign(
         label,
-        GTK_ALIGN_END
+        GTK_ALIGN_START
     );
-
 
     gtk_widget_set_valign(
         label,

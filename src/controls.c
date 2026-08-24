@@ -29,49 +29,143 @@ typedef struct {
 
     PlayerApp *app;
 
+    guint info_timer_id;
+
+    char message[4096];
+
 } Controls;
 
-
 /* ============================================================
- * RESTAURA INFO LABEL
+ * ATUALIZA INFO LABEL
  * ============================================================ */
 
-static gboolean restore_info_label(
+static gboolean update_info_label(
     gpointer data)
 {
     Controls *controls = data;
 
 
     if (!controls ||
-        !controls->info_label)
-        return G_SOURCE_REMOVE;
+        !controls->info_label ||
+        !controls->app ||
+        !controls->app->render)
+        return G_SOURCE_CONTINUE;
 
 
-    const char *filename =
-        player_app_get_filename(
-            controls->app
+    Player *player =
+        render_get_player(
+            controls->app->render
         );
 
 
-    if (filename) {
+    if (!player)
+        return G_SOURCE_CONTINUE;
 
-        gtk_label_set_text(
-            GTK_LABEL(controls->info_label),
-            filename
+
+    double position = 0.0;
+    double duration = 0.0;
+
+
+    if (player_get_time(
+            player,
+            &position,
+            &duration) < 0)
+        return G_SOURCE_CONTINUE;
+
+
+    int pos_sec =
+        (int)position;
+
+    int dur_sec =
+        (int)duration;
+
+
+    int pos_min =
+        pos_sec / 60;
+
+    int pos_seconds =
+        pos_sec % 60;
+
+
+    int dur_min =
+        dur_sec / 60;
+
+    int dur_seconds =
+        dur_sec % 60;
+
+
+    int percent = 0;
+
+
+    if (duration > 0.0) {
+
+        percent =
+            (int)((position / duration) * 100.0);
+
+
+        if (percent < 0)
+            percent = 0;
+
+        if (percent > 100)
+            percent = 100;
+    }
+
+
+    const char *filename =
+        player_get_filename(
+            player
+        );
+
+
+    if (!filename)
+        filename = "";
+
+
+    char text[8192];
+
+
+    if (controls->message[0]) {
+
+        snprintf(
+            text,
+            sizeof(text),
+            "%02d:%02d / %02d:%02d / %d%%\n"
+            "%s\n"
+            "%s",
+            pos_min,
+            pos_seconds,
+            dur_min,
+            dur_seconds,
+            percent,
+            filename,
+            controls->message
         );
 
     } else {
 
-        gtk_label_set_text(
-            GTK_LABEL(controls->info_label),
-            ""
+        snprintf(
+            text,
+            sizeof(text),
+            "%02d:%02d / %02d:%02d / %d%%\n"
+            "%s",
+            pos_min,
+            pos_seconds,
+            dur_min,
+            dur_seconds,
+            percent,
+            filename
         );
     }
 
 
-    return G_SOURCE_REMOVE;
-}
+    gtk_label_set_text(
+        GTK_LABEL(controls->info_label),
+        text
+    );
 
+
+    return G_SOURCE_CONTINUE;
+}
 
 /* ============================================================
  * MENSAGEM NO LABEL
@@ -82,21 +176,15 @@ static void show_message(
     const char *message)
 {
     if (!controls ||
-        !controls->info_label ||
         !message)
         return;
 
 
-    gtk_label_set_text(
-        GTK_LABEL(controls->info_label),
+    snprintf(
+        controls->message,
+        sizeof(controls->message),
+        "%s",
         message
-    );
-
-
-    g_timeout_add(
-        2000,
-        restore_info_label,
-        controls
     );
 }
 
@@ -1132,6 +1220,21 @@ void controls_setup(
         grab_gl_focus,
         controls
     );
+
+
+    /* --------------------------------------------------------
+     * TIMER DO INFO LABEL
+     *
+     * Atualiza posição/duração aproximadamente 4 vezes
+     * por segundo.
+     * -------------------------------------------------------- */
+
+    controls->info_timer_id =
+        g_timeout_add(
+            250,
+            update_info_label,
+            controls
+        );
 
 
     fprintf(

@@ -515,6 +515,86 @@ int player_load_file(
 
 
 /* ============================================================
+ * GET TIME
+ * ============================================================ */
+
+int player_get_time(
+    Player *player,
+    double *position,
+    double *duration)
+{
+    if (!player ||
+        !player->mpv ||
+        !position ||
+        !duration)
+        return -1;
+
+
+    *position = 0.0;
+    *duration = 0.0;
+
+
+    int status =
+        mpv_get_property(
+            player->mpv,
+            "time-pos",
+            MPV_FORMAT_DOUBLE,
+            position
+        );
+
+
+    if (status < 0) {
+
+        fprintf(
+            stderr,
+            "[MPV] erro obtendo time-pos: %s\n",
+            mpv_error_string(status)
+        );
+
+        return -1;
+    }
+
+
+    status =
+        mpv_get_property(
+            player->mpv,
+            "duration",
+            MPV_FORMAT_DOUBLE,
+            duration
+        );
+
+
+    if (status < 0) {
+
+        fprintf(
+            stderr,
+            "[MPV] erro obtendo duration: %s\n",
+            mpv_error_string(status)
+        );
+
+        return -1;
+    }
+
+
+    return 0;
+}
+
+
+/* ============================================================
+ * GET FILENAME
+ * ============================================================ */
+
+const char *player_get_filename(
+    Player *player)
+{
+    if (!player)
+        return NULL;
+
+
+    return player->filename;
+}
+
+/* ============================================================
  * EVENTOS
  * ============================================================ */
 
