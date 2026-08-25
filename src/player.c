@@ -34,6 +34,8 @@ struct _Player {
 
     int saturation;
 
+    int gamma;
+
     double video_zoom;
 
     double video_pan_x;
@@ -176,6 +178,8 @@ Player *player_new(void)
     player->contrast = 0;
 
     player->saturation = 0;
+
+    player->gamma = 0;
 
     player->volume = 100;
 
@@ -546,10 +550,22 @@ int player_load_file(
         "0"
     );
 
-    player_set_property(
-        player,
-        "saturation",
-        "0"
+
+    /*
+     * Reset saturation via lavfi.
+     */
+    const char *vf_reset[] = {
+
+        "vf",
+        "set",
+        "lavfi=[eq=saturation=1.0]",
+        NULL
+    };
+
+
+    mpv_command(
+        player->mpv,
+        vf_reset
     );
 
     player_set_property(
@@ -1319,8 +1335,9 @@ void player_change_saturation(
         !player->mpv)
         return;
 
+
     player->saturation +=
-        amount;
+        amount * 10;
 
 
     if (player->saturation > 100)
@@ -1331,34 +1348,72 @@ void player_change_saturation(
         player->saturation = -100;
 
 
-    player_set_int_property(
-        player,
-        "saturation",
-        player->saturation
+    /*
+     * Converte:
+     *
+     * saturation = 0
+     *     -> eq=saturation=1.0
+     *
+     * saturation = 100
+     *     -> eq=saturation=2.0
+     *
+     * saturation = -100
+     *     -> eq=saturation=0.0
+     */
+
+    double saturation =
+        1.0 +
+        ((double)player->saturation / 100.0);
+
+
+    char filter[128];
+
+
+    snprintf(
+        filter,
+        sizeof(filter),
+        "lavfi=[eq=saturation=%.3f]",
+        saturation
     );
 
 
-    int64_t actual = 0;
+    const char *command[] = {
+
+        "vf",
+        "set",
+        filter,
+        NULL
+    };
+
 
     int status =
-        mpv_get_property(
+        mpv_command(
             player->mpv,
-            "saturation",
-            MPV_FORMAT_INT64,
-            &actual
+            command
         );
 
 
-    if (status >= 0) {
+    if (status < 0) {
 
         fprintf(
             stderr,
-            "[SATURATION] interno=%d mpv=%ld\n",
-            player->saturation,
-            (long)actual
+            "[MPV] erro configurando saturation: %s\n",
+            mpv_error_string(status)
         );
+
+        return;
     }
+
+
+    fprintf(
+        stderr,
+        "[MPV] saturation = %d -> %.3f\n",
+        player->saturation,
+        saturation
+    );
 }
+
+
 
 
 /* ============================================================
