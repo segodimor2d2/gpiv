@@ -170,6 +170,14 @@ static gboolean update_info_label(
                 "fz"
             );
 
+        } else if (controls->leadfvar == 'v') {
+
+            snprintf(
+                leader,
+                sizeof(leader),
+                "fv"
+            );
+
         } else {
 
             snprintf(
@@ -639,6 +647,25 @@ static gboolean on_key_pressed(
             return TRUE;
         }
 
+
+        /* ----------------------------------------------------
+         * V -> VOLUME
+         *
+         * fv
+         * ---------------------------------------------------- */
+
+        if (keyval == GDK_KEY_v ||
+            keyval == GDK_KEY_V) {
+
+            controls->leadfvar = 'v';
+
+            fprintf(
+                stderr,
+                "[LEADER] fv\n"
+            );
+
+            return TRUE;
+        }
 
         /* ----------------------------------------------------
          * S -> SCREENSHOT
@@ -1207,12 +1234,36 @@ static gboolean on_scroll(
     }
 
 
+    /* --------------------------------------------------------
+     * FV -> VOLUME
+     * -------------------------------------------------------- */
+
+    if (controls->leadf &&
+        controls->leadfvar == 'v') {
+
+        /*
+         * Scroll para cima:
+         * volume +
+         *
+         * Scroll para baixo:
+         * volume -
+         */
+
+        player_change_volume(
+            player,
+            (dy < 0.0) ? 5 : -5
+        );
+
+        return TRUE;
+    }
+
     /*
      * Sem leader de scroll:
      *
      * fz -> zoom
      * fb -> brightness
      * fc -> contrast
+     * fv -> volume
      *
      * Fora desses modos o scroll não faz nada.
      */
