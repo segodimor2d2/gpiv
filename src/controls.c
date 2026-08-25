@@ -1183,9 +1183,38 @@ static gboolean on_scroll(
         return TRUE;
     }
 
+    /* --------------------------------------------------------
+     * FC -> CONTRAST
+     * -------------------------------------------------------- */
+
+    if (controls->leadf &&
+        controls->leadfvar == 'c') {
+
+        /*
+         * Scroll para cima:
+         * contrast +
+         *
+         * Scroll para baixo:
+         * contrast -
+         */
+
+        player_change_contrast(
+            player,
+            (dy < 0.0) ? 1 : -1
+        );
+
+        return TRUE;
+    }
+
 
     /*
-     * Outros leaders ainda não usam scroll.
+     * Sem leader de scroll:
+     *
+     * fz -> zoom
+     * fb -> brightness
+     * fc -> contrast
+     *
+     * Fora desses modos o scroll não faz nada.
      */
 
     return FALSE;
