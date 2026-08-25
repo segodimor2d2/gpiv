@@ -30,6 +30,8 @@ struct _Player {
 
     int brightness;
 
+    int contrast;
+
     double video_zoom;
 
     double video_pan_x;
@@ -129,6 +131,8 @@ Player *player_new(void)
     player->video_rotation = 0;
 
     player->brightness = 0;
+
+    player->contrast = 0;
 
     player->volume = 100;
 
@@ -457,6 +461,8 @@ int player_load_file(
 
     player->brightness = 0;
 
+    player->contrast = 0;
+
     player->video_zoom = 0.0;
 
     player->video_pan_x = 0.0;
@@ -489,6 +495,11 @@ int player_load_file(
         "0"
     );
 
+    player_set_property(
+        player,
+        "contrast",
+        "0"
+    );
 
     player_set_property(
         player,
@@ -1225,6 +1236,55 @@ void player_change_brightness(
 
 }
 
+/* ============================================================
+ * CONTRAST
+ * ============================================================ */
+
+void player_change_contrast(
+    Player *player,
+    int amount)
+{
+    if (!player ||
+        !player->mpv)
+        return;
+
+
+    player->contrast +=
+        amount;
+
+
+    if (player->contrast > 100)
+        player->contrast = 100;
+
+
+    if (player->contrast < -100)
+        player->contrast = -100;
+
+
+    char value[32];
+
+
+    snprintf(
+        value,
+        sizeof(value),
+        "%d",
+        player->contrast
+    );
+
+
+    player_set_property(
+        player,
+        "contrast",
+        value
+    );
+
+
+    fprintf(
+        stderr,
+        "[MPV] contrast = %d\n",
+        player->contrast
+    );
+}
 
 /* ============================================================
  * SCREENSHOT

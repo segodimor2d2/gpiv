@@ -191,6 +191,10 @@ void player_change_brightness(
     int amount
 );
 
+void player_change_contrast(
+    Player *player,
+    int amount
+);
 
 /* ============================================================
  * SCREENSHOT

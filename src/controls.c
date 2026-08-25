@@ -33,6 +33,14 @@ typedef struct {
 
     char message[4096];
 
+    /*
+     * Leader
+     */
+
+    gboolean leadf;
+
+    char leadfvar;
+
 } Controls;
 
 /* ============================================================
@@ -458,6 +466,145 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
+     * ESC -> SAI DO LEADER
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_Escape) {
+
+        controls->leadf = FALSE;
+        controls->leadfvar = '\0';
+
+        fprintf(
+            stderr,
+            "[LEADER] OFF\n"
+        );
+
+        return TRUE;
+    }
+
+    /* --------------------------------------------------------
+     * F -> LEADER
+     * -------------------------------------------------------- */
+
+    if (keyval == GDK_KEY_f) {
+
+        controls->leadf = TRUE;
+        controls->leadfvar = '\0';
+
+        fprintf(
+            stderr,
+            "[LEADER] ON\n"
+        );
+
+        return TRUE;
+    }
+
+
+    /* --------------------------------------------------------
+     * LEADER
+     * -------------------------------------------------------- */
+
+    if (controls->leadf) {
+
+        /* ----------------------------------------------------
+         * B -> BRIGHTNESS
+         * ---------------------------------------------------- */
+
+        if (keyval == GDK_KEY_b ||
+            keyval == GDK_KEY_B) {
+
+            controls->leadfvar = 'b';
+
+            fprintf(
+                stderr,
+                "[LEADER] brightness\n"
+            );
+
+            return TRUE;
+        }
+
+
+        /* ----------------------------------------------------
+         * C -> CONTRAST
+         * ---------------------------------------------------- */
+
+        if (keyval == GDK_KEY_c ||
+            keyval == GDK_KEY_C) {
+
+            controls->leadfvar = 'c';
+
+            fprintf(
+                stderr,
+                "[LEADER] contrast\n"
+            );
+
+            return TRUE;
+        }
+
+
+        /* ----------------------------------------------------
+         * U -> FILTRO +
+         * ---------------------------------------------------- */
+
+        if (keyval == GDK_KEY_u ||
+            keyval == GDK_KEY_U) {
+
+            if (player) {
+
+                if (controls->leadfvar == 'b') {
+
+                    player_change_brightness(
+                        player,
+                        1
+                    );
+
+                } else if (controls->leadfvar == 'c') {
+
+                    player_change_contrast(
+                        player,
+                        1
+                    );
+                }
+            }
+
+            return TRUE;
+        }
+
+
+        /* ----------------------------------------------------
+         * I -> FILTRO -
+         * ---------------------------------------------------- */
+
+        if (keyval == GDK_KEY_i ||
+            keyval == GDK_KEY_I) {
+
+            if (player) {
+
+                if (controls->leadfvar == 'b') {
+
+                    player_change_brightness(
+                        player,
+                        -1
+                    );
+
+                } else if (controls->leadfvar == 'c') {
+
+                    player_change_contrast(
+                        player,
+                        -1
+                    );
+                }
+            }
+
+            return TRUE;
+        }
+    }
+
+    /* ========================================================
+     * A PARTIR DAQUI CONTINUA O TECLADO NORMAL
+     * ======================================================== */
+
+    /* --------------------------------------------------------
      * Q -> SAIR
      * -------------------------------------------------------- */
 
@@ -660,8 +807,7 @@ static gboolean on_key_pressed(
      * V -> VOLUME +
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_v ||
-        keyval == GDK_KEY_V) {
+    if (keyval == GDK_KEY_V) {
 
         if (player) {
 
@@ -679,8 +825,7 @@ static gboolean on_key_pressed(
      * C -> VOLUME -
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_c ||
-        keyval == GDK_KEY_C) {
+    if (keyval == GDK_KEY_C) {
 
         if (player) {
 
@@ -698,8 +843,7 @@ static gboolean on_key_pressed(
      * x -> VOLUME 0
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_x ||
-        keyval == GDK_KEY_X) {
+    if (keyval == GDK_KEY_X) {
 
         if (player) {
 
@@ -787,46 +931,6 @@ static gboolean on_key_pressed(
 
             player_rotate(
                 player
-            );
-        }
-
-
-        return TRUE;
-    }
-
-
-    /* --------------------------------------------------------
-     * U -> BRIGHTNESS +
-     * -------------------------------------------------------- */
-
-    if (keyval == GDK_KEY_u ||
-        keyval == GDK_KEY_U) {
-
-        if (player) {
-
-            player_change_brightness(
-                player,
-                1
-            );
-        }
-
-
-        return TRUE;
-    }
-
-
-    /* --------------------------------------------------------
-     * I -> BRIGHTNESS -
-     * -------------------------------------------------------- */
-
-    if (keyval == GDK_KEY_i ||
-        keyval == GDK_KEY_I) {
-
-        if (player) {
-
-            player_change_brightness(
-                player,
-                -1
             );
         }
 
@@ -1100,6 +1204,8 @@ void controls_setup(
     controls->info_label = info_label;
     controls->app = app;
 
+    controls->leadf = FALSE;
+    controls->leadfvar = '\0';
 
     fprintf(
         stderr,
