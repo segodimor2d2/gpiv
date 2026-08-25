@@ -5,7 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <limits.h>
-
+#include <stdint.h>
 
 /* ============================================================
  * PLAYER
@@ -32,6 +32,8 @@ struct _Player {
 
     int contrast;
 
+    int saturation;
+
     double video_zoom;
 
     double video_pan_x;
@@ -56,6 +58,45 @@ struct _Player {
     double pan_start_pan_y;
 };
 
+/* ============================================================
+ * API DE PROPRIEDADES
+ * ============================================================ */
+static int player_set_int_property(
+    Player *player,
+    const char *property,
+    int value)
+{
+    if (!player ||
+        !player->mpv ||
+        !property)
+        return -1;
+
+
+    int status =
+        mpv_set_property(
+            player->mpv,
+            property,
+            MPV_FORMAT_INT64,
+            &(int64_t){ value }
+        );
+
+
+    if (status < 0) {
+
+        fprintf(
+            stderr,
+            "[MPV] erro set %s=%d: %s\n",
+            property,
+            value,
+            mpv_error_string(status)
+        );
+
+        return status;
+    }
+
+
+    return 0;
+}
 
 /* ============================================================
  * COMANDOS MPV
@@ -133,6 +174,8 @@ Player *player_new(void)
     player->brightness = 0;
 
     player->contrast = 0;
+
+    player->saturation = 0;
 
     player->volume = 100;
 
@@ -463,6 +506,8 @@ int player_load_file(
 
     player->contrast = 0;
 
+    player->saturation = 0;
+
     player->video_zoom = 0.0;
 
     player->video_pan_x = 0.0;
@@ -498,6 +543,12 @@ int player_load_file(
     player_set_property(
         player,
         "contrast",
+        "0"
+    );
+
+    player_set_property(
+        player,
+        "saturation",
         "0"
     );
 
@@ -1217,23 +1268,11 @@ void player_change_brightness(
         player->brightness = -100;
 
 
-    char value[32];
-
-
-    snprintf(
-        value,
-        sizeof(value),
-        "%d",
-        player->brightness
-    );
-
-
-    player_set_property(
+    player_set_int_property(
         player,
         "brightness",
-        value
+        player->brightness
     );
-
 }
 
 /* ============================================================
@@ -1261,30 +1300,66 @@ void player_change_contrast(
         player->contrast = -100;
 
 
-    char value[32];
-
-
-    snprintf(
-        value,
-        sizeof(value),
-        "%d",
-        player->contrast
-    );
-
-
-    player_set_property(
+    player_set_int_property(
         player,
         "contrast",
-        value
-    );
-
-
-    fprintf(
-        stderr,
-        "[MPV] contrast = %d\n",
         player->contrast
     );
 }
+
+/* ============================================================
+ * SATURATION
+ * ============================================================ */
+
+void player_change_saturation(
+    Player *player,
+    int amount)
+{
+    if (!player ||
+        !player->mpv)
+        return;
+
+    player->saturation +=
+        amount;
+
+
+    if (player->saturation > 100)
+        player->saturation = 100;
+
+
+    if (player->saturation < -100)
+        player->saturation = -100;
+
+
+    player_set_int_property(
+        player,
+        "saturation",
+        player->saturation
+    );
+
+
+    int64_t actual = 0;
+
+    int status =
+        mpv_get_property(
+            player->mpv,
+            "saturation",
+            MPV_FORMAT_INT64,
+            &actual
+        );
+
+
+    if (status >= 0) {
+
+        fprintf(
+            stderr,
+            "[SATURATION] interno=%d mpv=%ld\n",
+            player->saturation,
+            (long)actual
+        );
+    }
+}
+
 
 /* ============================================================
  * SCREENSHOT

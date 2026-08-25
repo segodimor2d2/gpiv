@@ -196,6 +196,11 @@ void player_change_contrast(
     int amount
 );
 
+void player_change_saturation(
+    Player *player,
+    int delta
+);
+
 /* ============================================================
  * SCREENSHOT
  * ============================================================ */

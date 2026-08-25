@@ -162,6 +162,14 @@ static gboolean update_info_label(
                 "fs"
             );
 
+        } else if (controls->leadfvar == 'p') {
+
+            snprintf(
+                leader,
+                sizeof(leader),
+                "fp"
+            );
+
         } else if (controls->leadfvar == 'z') {
 
             snprintf(
@@ -605,7 +613,7 @@ static gboolean on_key_pressed(
      * f  -> ativa leader
      * fb -> brightness
      * fc -> contrast
-     * fs -> screenshot
+     * fp -> screenshot
      *
      * O leader NÃO bloqueia outras teclas.
      * -------------------------------------------------------- */
@@ -647,6 +655,24 @@ static gboolean on_key_pressed(
             return TRUE;
         }
 
+        /* ----------------------------------------------------
+         * S -> SATURATION
+         *
+         * fs
+         * ---------------------------------------------------- */
+
+        if (keyval == GDK_KEY_s ||
+            keyval == GDK_KEY_S) {
+
+            controls->leadfvar = 's';
+
+            fprintf(
+                stderr,
+                "[LEADER] fs\n"
+            );
+
+            return TRUE;
+        }
 
         /* ----------------------------------------------------
          * V -> VOLUME
@@ -668,19 +694,19 @@ static gboolean on_key_pressed(
         }
 
         /* ----------------------------------------------------
-         * S -> SCREENSHOT
+         * P -> SCREENSHOT
          *
-         * fs
+         * fp
          * ---------------------------------------------------- */
 
-        if (keyval == GDK_KEY_s ||
-            keyval == GDK_KEY_S) {
+        if (keyval == GDK_KEY_p ||
+            keyval == GDK_KEY_P) {
 
-            controls->leadfvar = 's';
+            controls->leadfvar = 'p';
 
             fprintf(
                 stderr,
-                "[LEADER] fs\n"
+                "[LEADER] fp\n"
             );
 
 
@@ -725,7 +751,7 @@ static gboolean on_key_pressed(
              *
              * Portanto:
              *
-             * f -> fs
+             * f -> fp
              *
              * e depois ainda pode:
              *
@@ -761,7 +787,7 @@ static gboolean on_key_pressed(
          * fb + u -> brightness +
          * fc + u -> contrast +
          *
-         * fs + u -> não faz nada
+         * fp + u -> não faz nada
          * ---------------------------------------------------- */
 
         if (keyval == GDK_KEY_u ||
@@ -782,6 +808,13 @@ static gboolean on_key_pressed(
                         player,
                         1
                     );
+
+                } else if (controls->leadfvar == 's') {
+
+                    player_change_saturation(
+                        player,
+                        -1
+                    );
                 }
             }
 
@@ -795,7 +828,7 @@ static gboolean on_key_pressed(
          * fb + i -> brightness -
          * fc + i -> contrast -
          *
-         * fs + i -> não faz nada
+         * fp + i -> não faz nada
          * ---------------------------------------------------- */
 
         if (keyval == GDK_KEY_i ||
@@ -813,6 +846,13 @@ static gboolean on_key_pressed(
                 } else if (controls->leadfvar == 'c') {
 
                     player_change_contrast(
+                        player,
+                        -1
+                    );
+
+                } else if (controls->leadfvar == 's') {
+
+                    player_change_saturation(
                         player,
                         -1
                     );
@@ -1233,6 +1273,28 @@ static gboolean on_scroll(
         return TRUE;
     }
 
+    /* --------------------------------------------------------
+     * FS -> SATURATION
+     * -------------------------------------------------------- */
+
+    if (controls->leadf &&
+        controls->leadfvar == 's') {
+
+        /*
+         * Scroll para cima:
+         * saturation +
+         *
+         * Scroll para baixo:
+         * saturation -
+         */
+
+        player_change_saturation(
+            player,
+            (dy < 0.0) ? 1 : -1
+        );
+
+        return TRUE;
+    }
 
     /* --------------------------------------------------------
      * FV -> VOLUME
