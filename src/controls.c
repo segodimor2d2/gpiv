@@ -131,38 +131,113 @@ static gboolean update_info_label(
 
     char text[8192];
 
+    char leader[16];
+
+    leader[0] = '\0';
+
+
+    if (controls->leadf) {
+
+        if (controls->leadfvar == 'b') {
+
+            snprintf(
+                leader,
+                sizeof(leader),
+                "fb"
+            );
+
+        } else if (controls->leadfvar == 'c') {
+
+            snprintf(
+                leader,
+                sizeof(leader),
+                "fc"
+            );
+
+        } else {
+
+            snprintf(
+                leader,
+                sizeof(leader),
+                "f"
+            );
+        }
+    }
+
 
     if (controls->message[0]) {
 
-        snprintf(
-            text,
-            sizeof(text),
-            "%02d:%02d / %02d:%02d / %d%%\n"
-            "%s\n"
-            "%s",
-            pos_min,
-            pos_seconds,
-            dur_min,
-            dur_seconds,
-            percent,
-            filename,
-            controls->message
-        );
+        if (leader[0]) {
+
+            snprintf(
+                text,
+                sizeof(text),
+                "%02d:%02d / %02d:%02d / %d%%\n"
+                "%s\n"
+                "%s\n"
+                "%s",
+                pos_min,
+                pos_seconds,
+                dur_min,
+                dur_seconds,
+                percent,
+                filename,
+                controls->message,
+                leader
+            );
+
+        } else {
+
+            snprintf(
+                text,
+                sizeof(text),
+                "%02d:%02d / %02d:%02d / %d%%\n"
+                "%s\n"
+                "%s",
+                pos_min,
+                pos_seconds,
+                dur_min,
+                dur_seconds,
+                percent,
+                filename,
+                controls->message
+            );
+        }
 
     } else {
 
-        snprintf(
-            text,
-            sizeof(text),
-            "%02d:%02d / %02d:%02d / %d%%\n"
-            "%s",
-            pos_min,
-            pos_seconds,
-            dur_min,
-            dur_seconds,
-            percent,
-            filename
-        );
+        if (leader[0]) {
+
+            snprintf(
+                text,
+                sizeof(text),
+                "%02d:%02d / %02d:%02d / %d%%\n"
+                "%s\n"
+                "%s",
+                pos_min,
+                pos_seconds,
+                dur_min,
+                dur_seconds,
+                percent,
+                filename,
+                leader
+            );
+
+        } else {
+
+            snprintf(
+                text,
+                sizeof(text),
+                "%02d:%02d / %02d:%02d / %d%%\n"
+                "%s",
+                pos_min,
+                pos_seconds,
+                dur_min,
+                dur_seconds,
+                percent,
+                filename
+            );
+        }
     }
 
 
