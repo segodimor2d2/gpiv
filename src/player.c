@@ -550,6 +550,11 @@ int player_load_file(
         "0"
     );
 
+    player_set_property(
+        player,
+        "gamma",
+        "0"
+    );
 
     /*
      * Reset saturation via lavfi.
@@ -1305,7 +1310,7 @@ void player_change_contrast(
 
 
     player->contrast +=
-        amount;
+        amount * 5;
 
 
     if (player->contrast > 100)
@@ -1414,6 +1419,44 @@ void player_change_saturation(
 }
 
 
+/* ============================================================
+ * GAMMA
+ * ============================================================ */
+
+void player_change_gamma(
+    Player *player,
+    int amount)
+{
+    if (!player ||
+        !player->mpv)
+        return;
+
+
+    player->gamma +=
+        amount * 5;
+
+
+    if (player->gamma > 100)
+        player->gamma = 100;
+
+
+    if (player->gamma < -100)
+        player->gamma = -100;
+
+
+    player_set_int_property(
+        player,
+        "gamma",
+        player->gamma
+    );
+
+
+    fprintf(
+        stderr,
+        "[MPV] gamma = %d\n",
+        player->gamma
+    );
+}
 
 
 /* ============================================================

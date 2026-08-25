@@ -162,6 +162,15 @@ static gboolean update_info_label(
                 "fs"
             );
 
+
+        } else if (controls->leadfvar == 'g') {
+
+            snprintf(
+                leader,
+                sizeof(leader),
+                "fg"
+            );
+
         } else if (controls->leadfvar == 'p') {
 
             snprintf(
@@ -675,6 +684,25 @@ static gboolean on_key_pressed(
         }
 
         /* ----------------------------------------------------
+         * G -> GAMMA
+         *
+         * fg
+         * ---------------------------------------------------- */
+
+        if (keyval == GDK_KEY_g ||
+            keyval == GDK_KEY_G) {
+
+            controls->leadfvar = 'g';
+
+            fprintf(
+                stderr,
+                "[LEADER] fg\n"
+            );
+
+            return TRUE;
+        }
+
+        /* ----------------------------------------------------
          * V -> VOLUME
          *
          * fv
@@ -813,7 +841,21 @@ static gboolean on_key_pressed(
 
                     player_change_saturation(
                         player,
-                        -1
+                        1
+                    );
+
+                } else if (controls->leadfvar == 'g') {
+
+                    player_change_gamma(
+                        player,
+                        1
+                    );
+
+                } else if (controls->leadfvar == 'z') {
+
+                    player_change_zoom(
+                        player,
+                        1
                     );
                 }
             }
@@ -853,6 +895,20 @@ static gboolean on_key_pressed(
                 } else if (controls->leadfvar == 's') {
 
                     player_change_saturation(
+                        player,
+                        -1
+                    );
+
+                } else if (controls->leadfvar == 'g') {
+
+                    player_change_gamma(
+                        player,
+                        -1
+                    );
+
+                } else if (controls->leadfvar == 'z') {
+
+                    player_change_zoom(
                         player,
                         -1
                     );
@@ -1289,6 +1345,29 @@ static gboolean on_scroll(
          */
 
         player_change_saturation(
+            player,
+            (dy < 0.0) ? 1 : -1
+        );
+
+        return TRUE;
+    }
+
+    /* --------------------------------------------------------
+     * FG -> GAMMA
+     * -------------------------------------------------------- */
+
+    if (controls->leadf &&
+        controls->leadfvar == 'g') {
+
+        /*
+         * Scroll para cima:
+         * gamma +
+         *
+         * Scroll para baixo:
+         * gamma -
+         */
+
+        player_change_gamma(
             player,
             (dy < 0.0) ? 1 : -1
         );

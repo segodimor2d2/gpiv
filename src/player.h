@@ -201,6 +201,11 @@ void player_change_saturation(
     int delta
 );
 
+void player_change_gamma(
+    Player *player,
+    int amount
+);
+
 /* ============================================================
  * SCREENSHOT
  * ============================================================ */
