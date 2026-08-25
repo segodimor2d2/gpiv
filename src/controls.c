@@ -154,6 +154,22 @@ static gboolean update_info_label(
                 "fc"
             );
 
+        } else if (controls->leadfvar == 's') {
+
+            snprintf(
+                leader,
+                sizeof(leader),
+                "fs"
+            );
+
+        } else if (controls->leadfvar == 'z') {
+
+            snprintf(
+                leader,
+                sizeof(leader),
+                "fz"
+            );
+
         } else {
 
             snprintf(
@@ -693,6 +709,24 @@ static gboolean on_key_pressed(
             return TRUE;
         }
 
+        /* ----------------------------------------------------
+         * Z -> ZOOM
+         *
+         * fz
+         * ---------------------------------------------------- */
+
+        if (keyval == GDK_KEY_z ||
+            keyval == GDK_KEY_Z) {
+
+            controls->leadfvar = 'z';
+
+            fprintf(
+                stderr,
+                "[LEADER] fz\n"
+            );
+
+            return TRUE;
+        }
 
         /* ----------------------------------------------------
          * U -> FILTRO +
@@ -1091,8 +1125,22 @@ static gboolean on_scroll(
     (void)dx;
 
 
-    if (!controls ||
-        !controls->app ||
+    if (!controls)
+        return FALSE;
+
+
+    /*
+     * Scroll só funciona quando o leader
+     * está no modo zoom:
+     *
+     * fz
+     */
+    if (!controls->leadf ||
+        controls->leadfvar != 'z')
+        return FALSE;
+
+
+    if (!controls->app ||
         !controls->app->render)
         return FALSE;
 
