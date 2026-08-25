@@ -1112,7 +1112,7 @@ static gboolean on_key_pressed(
 
 
 /* ============================================================
- * ZOOM
+ * SCROLL
  * ============================================================ */
 
 static gboolean on_scroll(
@@ -1126,17 +1126,6 @@ static gboolean on_scroll(
 
 
     if (!controls)
-        return FALSE;
-
-
-    /*
-     * Scroll só funciona quando o leader
-     * está no modo zoom:
-     *
-     * fz
-     */
-    if (!controls->leadf ||
-        controls->leadfvar != 'z')
         return FALSE;
 
 
@@ -1155,13 +1144,51 @@ static gboolean on_scroll(
         return FALSE;
 
 
-    player_change_zoom(
-        player,
-        -dy
-    );
+    /* --------------------------------------------------------
+     * FZ -> ZOOM
+     * -------------------------------------------------------- */
+
+    if (controls->leadf &&
+        controls->leadfvar == 'z') {
+
+        player_change_zoom(
+            player,
+            -dy
+        );
+
+        return TRUE;
+    }
 
 
-    return TRUE;
+    /* --------------------------------------------------------
+     * FB -> BRIGHTNESS
+     * -------------------------------------------------------- */
+
+    if (controls->leadf &&
+        controls->leadfvar == 'b') {
+
+        /*
+         * Scroll para cima:
+         * brightness +
+         *
+         * Scroll para baixo:
+         * brightness -
+         */
+
+        player_change_brightness(
+            player,
+            (dy < 0.0) ? 1 : -1
+        );
+
+        return TRUE;
+    }
+
+
+    /*
+     * Outros leaders ainda não usam scroll.
+     */
+
+    return FALSE;
 }
 
 
