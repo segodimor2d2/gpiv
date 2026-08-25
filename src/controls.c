@@ -577,6 +577,13 @@ static gboolean on_key_pressed(
 
     /* --------------------------------------------------------
      * LEADER
+     *
+     * f  -> ativa leader
+     * fb -> brightness
+     * fc -> contrast
+     * fs -> screenshot
+     *
+     * O leader NÃO bloqueia outras teclas.
      * -------------------------------------------------------- */
 
     if (controls->leadf) {
@@ -592,7 +599,7 @@ static gboolean on_key_pressed(
 
             fprintf(
                 stderr,
-                "[LEADER] brightness\n"
+                "[LEADER] fb\n"
             );
 
             return TRUE;
@@ -610,7 +617,7 @@ static gboolean on_key_pressed(
 
             fprintf(
                 stderr,
-                "[LEADER] contrast\n"
+                "[LEADER] fc\n"
             );
 
             return TRUE;
@@ -618,7 +625,82 @@ static gboolean on_key_pressed(
 
 
         /* ----------------------------------------------------
+         * S -> SCREENSHOT
+         *
+         * fs
+         * ---------------------------------------------------- */
+
+        if (keyval == GDK_KEY_s ||
+            keyval == GDK_KEY_S) {
+
+            controls->leadfvar = 's';
+
+            fprintf(
+                stderr,
+                "[LEADER] fs\n"
+            );
+
+
+            if (player) {
+
+                const char *screenshot =
+                    player_save_frame(
+                        player
+                    );
+
+
+                if (screenshot) {
+
+                    char message[4096];
+
+
+                    snprintf(
+                        message,
+                        sizeof(message),
+                        "screenshot salvo: %s",
+                        screenshot
+                    );
+
+
+                    show_message(
+                        controls,
+                        message
+                    );
+
+                } else {
+
+                    show_message(
+                        controls,
+                        "Erro ao salvar screenshot"
+                    );
+                }
+            }
+
+
+            /*
+             * Continua dentro do leader.
+             *
+             * Portanto:
+             *
+             * f -> fs
+             *
+             * e depois ainda pode:
+             *
+             * fb
+             * fc
+             */
+
+            return TRUE;
+        }
+
+
+        /* ----------------------------------------------------
          * U -> FILTRO +
+         *
+         * fb + u -> brightness +
+         * fc + u -> contrast +
+         *
+         * fs + u -> não faz nada
          * ---------------------------------------------------- */
 
         if (keyval == GDK_KEY_u ||
@@ -648,6 +730,11 @@ static gboolean on_key_pressed(
 
         /* ----------------------------------------------------
          * I -> FILTRO -
+         *
+         * fb + i -> brightness -
+         * fc + i -> contrast -
+         *
+         * fs + i -> não faz nada
          * ---------------------------------------------------- */
 
         if (keyval == GDK_KEY_i ||
@@ -926,52 +1013,6 @@ static gboolean on_key_pressed(
                 player,
                 -200
             );
-        }
-
-
-        return TRUE;
-    }
-
-    /* --------------------------------------------------------
-     * S -> SCREENSHOT
-     * -------------------------------------------------------- */
-
-    if (keyval == GDK_KEY_s ||
-        keyval == GDK_KEY_S) {
-
-        if (player) {
-
-            const char *screenshot =
-                player_save_frame(
-                    player
-                );
-
-
-            if (screenshot) {
-
-                char message[4096];
-
-
-                snprintf(
-                    message,
-                    sizeof(message),
-                    "Salvo: %s",
-                    screenshot
-                );
-
-
-                show_message(
-                    controls,
-                    message
-                );
-
-            } else {
-
-                show_message(
-                    controls,
-                    "Erro ao salvar screenshot"
-                );
-            }
         }
 
 
