@@ -1542,20 +1542,10 @@ static gboolean on_key_pressed(
                  * Mostra a tag no label.
                  */
 
-                char message[PATH_MAX + 64];
-
-
-                snprintf(
-                    message,
-                    sizeof(message),
-                    "tag: %s",
-                    tag
-                );
-
-
-                show_message(
+                tag_file(
                     controls,
-                    message
+                    filename,
+                    tag
                 );
             }
 
