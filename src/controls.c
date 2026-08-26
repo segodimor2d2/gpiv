@@ -712,12 +712,6 @@ static void tag_file(
         controls
     );
 
-
-    /*
-     * Mantém o leader t ativo.
-     */
-
-    controls->leadt = TRUE;
 }
 
 
@@ -910,33 +904,31 @@ static gboolean update_info_label(
      * --------------------------------------------------------
      * LEADER T
      * --------------------------------------------------------
+     *
+     * O leader T é apenas um estado temporário:
+     *
+     *     t -> ativa
+     *     t + letra -> salva tag e desativa
+     *
+     * Não usamos leadtvar[0] aqui.
+     *
+     * leadtvar[] contém a lista de arquivos tagueados,
+     * e a posição [0] não representa necessariamente
+     * o arquivo atual.
      */
 
     char tag_leader[64];
-
 
     tag_leader[0] = '\0';
 
 
     if (controls->leadt) {
 
-        if (controls->leadtvar[0].tag[0]) {
-
-            snprintf(
-                tag_leader,
-                sizeof(tag_leader),
-                "t%s",
-                controls->leadtvar[0].tag
-            );
-
-        } else {
-
-            snprintf(
-                tag_leader,
-                sizeof(tag_leader),
-                "t"
-            );
-        }
+        snprintf(
+            tag_leader,
+            sizeof(tag_leader),
+            "t"
+        );
     }
 
 
@@ -1489,6 +1481,10 @@ static gboolean on_key_pressed(
             char tag_letter;
 
 
+            /*
+             * Converte maiúscula para minúscula.
+             */
+
             if (keyval >= GDK_KEY_A &&
                 keyval <= GDK_KEY_Z) {
 
@@ -1514,6 +1510,15 @@ static gboolean on_key_pressed(
                 char tag[4];
 
 
+                /*
+                 * Monta:
+                 *
+                 * ta
+                 * tb
+                 * tc
+                 * ...
+                 */
+
                 snprintf(
                     tag,
                     sizeof(tag),
@@ -1522,12 +1527,20 @@ static gboolean on_key_pressed(
                 );
 
 
+                /*
+                 * Salva a tag no tags.csv.
+                 */
+
                 tag_file(
                     controls,
                     filename,
                     tag
                 );
 
+
+                /*
+                 * Mostra a tag no label.
+                 */
 
                 char message[PATH_MAX + 64];
 
@@ -1548,8 +1561,27 @@ static gboolean on_key_pressed(
 
 
             /*
-             * Continua no leader t.
+             * ------------------------------------------------
+             * TERMINA O LEADER T
+             * ------------------------------------------------
+             *
+             * Depois de:
+             *
+             * t + letra
+             *
+             * a operação terminou.
+             *
+             * Não é mais necessário pressionar ESC.
              */
+
+            controls->leadt = FALSE;
+
+
+            fprintf(
+                stderr,
+                "[LEADER] T OFF\n"
+            );
+
 
             return TRUE;
         }
