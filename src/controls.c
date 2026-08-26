@@ -5,6 +5,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <limits.h>
 
 
 /* ============================================================
@@ -14,6 +16,23 @@
 #define FILE_JUMP 20
 #define SEEK_SECONDS 3
 #define SEEK_HARD_SECONDS 10
+
+#define MAX_TAGS 4096
+#define MAX_TAG_LENGTH 32
+
+
+/* ============================================================
+ * TAG
+ * ============================================================ */
+
+typedef struct {
+
+    char path[PATH_MAX];
+
+    char tag[MAX_TAG_LENGTH];
+
+} FileTag;
+
 
 /* ============================================================
  * CONTEXTO INTERNO
@@ -33,15 +52,674 @@ typedef struct {
 
     char message[4096];
 
+
     /*
-     * Leader
+     * --------------------------------------------------------
+     * LEADER F
+     * --------------------------------------------------------
      */
 
     gboolean leadf;
 
     char leadfvar;
 
+
+    /*
+     * --------------------------------------------------------
+     * LEADER T
+     * --------------------------------------------------------
+     *
+     * t -> ativa leader
+     *
+     * ta
+     * tb
+     * tc
+     * ...
+     */
+
+    gboolean leadt;
+
+    /*
+     * Lista de tags.
+     *
+     * Cada arquivo pode ter somente uma tag.
+     */
+
+    FileTag leadtvar[MAX_TAGS];
+
+    int leadt_count;
+
+
+    /*
+     * Pasta atualmente carregada.
+     *
+     * Usada para saber qual tags.csv deve ser utilizado.
+     */
+
+    char tags_directory[PATH_MAX];
+
+    char tags_file[PATH_MAX];
+
 } Controls;
+
+
+/* ============================================================
+ * RETORNA DIRETÓRIO DO ARQUIVO
+ * ============================================================ */
+
+static int get_file_directory(
+    const char *filename,
+    char *directory,
+    size_t directory_size)
+{
+    if (!filename ||
+        !directory ||
+        directory_size == 0)
+        return -1;
+
+
+    const char *slash =
+        strrchr(
+            filename,
+            '/'
+        );
+
+
+    if (!slash) {
+
+        snprintf(
+            directory,
+            directory_size,
+            "."
+        );
+
+        return 0;
+    }
+
+
+    size_t length =
+        (size_t)(slash - filename);
+
+
+    if (length == 0) {
+
+        if (directory_size < 2)
+            return -1;
+
+
+        snprintf(
+            directory,
+            directory_size,
+            "/"
+        );
+
+        return 0;
+    }
+
+
+    if (length >= directory_size)
+        return -1;
+
+
+    memcpy(
+        directory,
+        filename,
+        length
+    );
+
+
+    directory[length] =
+        '\0';
+
+
+    return 0;
+}
+
+
+/* ============================================================
+ * CRIA TAGS.CSV SE NÃO EXISTIR
+ * ============================================================ */
+
+static void create_tags_file(
+    Controls *controls)
+{
+    if (!controls ||
+        !controls->tags_file[0])
+        return;
+
+
+    FILE *file =
+        fopen(
+            controls->tags_file,
+            "a"
+        );
+
+
+    if (!file) {
+
+        fprintf(
+            stderr,
+            "[TAGS] não foi possível criar: %s\n",
+            controls->tags_file
+        );
+
+        return;
+    }
+
+
+    fclose(file);
+
+
+    fprintf(
+        stderr,
+        "[TAGS] arquivo disponível: %s\n",
+        controls->tags_file
+    );
+}
+
+
+/* ============================================================
+ * LIMPA LISTA DE TAGS
+ * ============================================================ */
+
+static void tags_clear(
+    Controls *controls)
+{
+    if (!controls)
+        return;
+
+
+    controls->leadt_count =
+        0;
+
+
+    memset(
+        controls->leadtvar,
+        0,
+        sizeof(controls->leadtvar)
+    );
+}
+
+
+/* ============================================================
+ * PROCURA TAG DE UM ARQUIVO
+ * ============================================================ */
+
+static int tags_find(
+    Controls *controls,
+    const char *path)
+{
+    if (!controls ||
+        !path)
+        return -1;
+
+
+    for (int i = 0;
+         i < controls->leadt_count;
+         i++) {
+
+        if (strcmp(
+                controls->leadtvar[i].path,
+                path
+            ) == 0) {
+
+            return i;
+        }
+    }
+
+
+    return -1;
+}
+
+
+/* ============================================================
+ * RETORNA TAG DO ARQUIVO
+ * ============================================================ */
+
+static const char *tags_get(
+    Controls *controls,
+    const char *path)
+{
+    if (!controls ||
+        !path)
+        return NULL;
+
+
+    int index =
+        tags_find(
+            controls,
+            path
+        );
+
+
+    if (index < 0)
+        return NULL;
+
+
+    return controls->leadtvar[index].tag;
+}
+
+
+/* ============================================================
+ * REMOVE QUEBRA DE LINHA
+ * ============================================================ */
+
+static void remove_newline(
+    char *text)
+{
+    if (!text)
+        return;
+
+
+    size_t length =
+        strlen(text);
+
+
+    while (length > 0 &&
+           (text[length - 1] == '\n' ||
+            text[length - 1] == '\r')) {
+
+        text[length - 1] =
+            '\0';
+
+        length--;
+    }
+}
+
+
+/* ============================================================
+ * CARREGA TAGS.CSV
+ * ============================================================ */
+
+static void tags_load(
+    Controls *controls,
+    const char *directory)
+{
+    if (!controls ||
+        !directory)
+        return;
+
+
+    tags_clear(
+        controls
+    );
+
+
+    snprintf(
+        controls->tags_directory,
+        sizeof(controls->tags_directory),
+        "%s",
+        directory
+    );
+
+
+    if (strlen(directory) + strlen("/tags.csv") >=
+        sizeof(controls->tags_file)) {
+
+        fprintf(
+            stderr,
+            "[TAGS] caminho para tags.csv muito longo\n"
+        );
+
+        return;
+    }
+
+    snprintf(
+        controls->tags_file,
+        sizeof(controls->tags_file),
+        "%s/tags.csv",
+        directory
+    );
+
+
+    /*
+     * Se não existir, cria.
+     */
+
+    create_tags_file(
+        controls
+    );
+
+
+    FILE *file =
+        fopen(
+            controls->tags_file,
+            "r"
+        );
+
+
+    if (!file) {
+
+        fprintf(
+            stderr,
+            "[TAGS] não foi possível abrir: %s\n",
+            controls->tags_file
+        );
+
+        return;
+    }
+
+
+    char line[PATH_MAX + MAX_TAG_LENGTH + 64];
+
+
+    while (fgets(
+        line,
+        sizeof(line),
+        file)) {
+
+        remove_newline(
+            line
+        );
+
+
+        if (!line[0])
+            continue;
+
+
+        /*
+         * Formato:
+         *
+         * /path/video.mp4,ta
+         */
+
+        char *comma =
+            strrchr(
+                line,
+                ','
+            );
+
+
+        if (!comma)
+            continue;
+
+
+        *comma =
+            '\0';
+
+
+        char *path =
+            line;
+
+
+        char *tag =
+            comma + 1;
+
+
+        while (*tag == ' ')
+            tag++;
+
+
+        if (!path[0] ||
+            !tag[0])
+            continue;
+
+
+        if (controls->leadt_count >= MAX_TAGS) {
+
+            fprintf(
+                stderr,
+                "[TAGS] limite de tags atingido\n"
+            );
+
+            break;
+        }
+
+        strncpy(
+            controls->leadtvar[controls->leadt_count].path,
+            path,
+            PATH_MAX - 1
+        );
+
+        controls->leadtvar[controls->leadt_count].path[PATH_MAX - 1] = '\0';
+
+        snprintf(
+            controls->leadtvar[
+                controls->leadt_count
+            ].tag,
+            MAX_TAG_LENGTH,
+            "%s",
+            tag
+        );
+
+
+        controls->leadt_count++;
+    }
+
+
+    fclose(file);
+
+
+    fprintf(
+        stderr,
+        "[TAGS] carregadas: %d\n",
+        controls->leadt_count
+    );
+}
+
+
+/* ============================================================
+ * SALVA TAGS.CSV
+ * ============================================================ */
+
+static void tags_save(
+    Controls *controls)
+{
+    if (!controls ||
+        !controls->tags_file[0])
+        return;
+
+
+    FILE *file =
+        fopen(
+            controls->tags_file,
+            "w"
+        );
+
+
+    if (!file) {
+
+        fprintf(
+            stderr,
+            "[TAGS] erro salvando: %s\n",
+            controls->tags_file
+        );
+
+        return;
+    }
+
+
+    for (int i = 0;
+         i < controls->leadt_count;
+         i++) {
+
+        fprintf(
+            file,
+            "%s,%s\n",
+            controls->leadtvar[i].path,
+            controls->leadtvar[i].tag
+        );
+    }
+
+
+    fclose(file);
+
+
+    fprintf(
+        stderr,
+        "[TAGS] salvo: %s (%d tags)\n",
+        controls->tags_file,
+        controls->leadt_count
+    );
+}
+
+
+/* ============================================================
+ * TROCA tags.csv CONFORME O ARQUIVO ATUAL
+ * ============================================================ */
+
+static void tags_update_directory(
+    Controls *controls,
+    const char *filename)
+{
+    if (!controls ||
+        !filename)
+        return;
+
+
+    char directory[PATH_MAX];
+
+
+    if (get_file_directory(
+            filename,
+            directory,
+            sizeof(directory)
+        ) < 0)
+        return;
+
+
+    /*
+     * Se continuamos na mesma pasta,
+     * não precisamos recarregar.
+     */
+
+    if (strcmp(
+            controls->tags_directory,
+            directory
+        ) == 0) {
+
+        return;
+    }
+
+
+    fprintf(
+        stderr,
+        "[TAGS] mudando pasta:\n"
+        "       %s\n",
+        directory
+    );
+
+
+    tags_load(
+        controls,
+        directory
+    );
+}
+
+
+/* ============================================================
+ * ADICIONA / ATUALIZA TAG
+ * ============================================================ */
+
+static void tag_file(
+    Controls *controls,
+    const char *path,
+    const char *tag)
+{
+    if (!controls ||
+        !path ||
+        !tag ||
+        !tag[0])
+        return;
+
+
+    int index =
+        tags_find(
+            controls,
+            path
+        );
+
+
+    /*
+     * Arquivo já possui tag.
+     *
+     * Substituímos.
+     */
+
+    if (index >= 0) {
+
+        snprintf(
+            controls->leadtvar[index].tag,
+            MAX_TAG_LENGTH,
+            "%s",
+            tag
+        );
+
+
+        fprintf(
+            stderr,
+            "[TAGS] atualizado:\n"
+            "       %s -> %s\n",
+            path,
+            tag
+        );
+
+    } else {
+
+        /*
+         * Nova tag.
+         */
+
+        if (controls->leadt_count >= MAX_TAGS) {
+
+            fprintf(
+                stderr,
+                "[TAGS] limite máximo atingido\n"
+            );
+
+            return;
+        }
+
+
+        snprintf(
+            controls->leadtvar[
+                controls->leadt_count
+            ].path,
+            PATH_MAX,
+            "%s",
+            path
+        );
+
+
+        snprintf(
+            controls->leadtvar[
+                controls->leadt_count
+            ].tag,
+            MAX_TAG_LENGTH,
+            "%s",
+            tag
+        );
+
+
+        controls->leadt_count++;
+
+
+        fprintf(
+            stderr,
+            "[TAGS] nova:\n"
+            "       %s -> %s\n",
+            path,
+            tag
+        );
+    }
+
+
+    /*
+     * Salva imediatamente.
+     */
+
+    tags_save(
+        controls
+    );
+
+
+    /*
+     * Mantém o leader t ativo.
+     */
+
+    controls->leadt = TRUE;
+}
+
 
 /* ============================================================
  * ATUALIZA INFO LABEL
@@ -81,6 +759,34 @@ static gboolean update_info_label(
         return G_SOURCE_CONTINUE;
 
 
+    const char *filename =
+        player_get_filename(
+            player
+        );
+
+
+    if (!filename)
+        filename = "";
+
+
+    /*
+     * --------------------------------------------------------
+     * VERIFICA TAGS.CSV DA PASTA ATUAL
+     * --------------------------------------------------------
+     */
+
+    tags_update_directory(
+        controls,
+        filename
+    );
+
+
+    /*
+     * --------------------------------------------------------
+     * TEMPO
+     * --------------------------------------------------------
+     */
+
     int pos_sec =
         (int)position;
 
@@ -119,17 +825,11 @@ static gboolean update_info_label(
     }
 
 
-    const char *filename =
-        player_get_filename(
-            player
-        );
-
-
-    if (!filename)
-        filename = "";
-
-
-    char text[8192];
+    /*
+     * --------------------------------------------------------
+     * LEADER F
+     * --------------------------------------------------------
+     */
 
     char leader[16];
 
@@ -206,9 +906,137 @@ static gboolean update_info_label(
     }
 
 
+    /*
+     * --------------------------------------------------------
+     * LEADER T
+     * --------------------------------------------------------
+     */
+
+    char tag_leader[64];
+
+
+    tag_leader[0] = '\0';
+
+
+    if (controls->leadt) {
+
+        if (controls->leadtvar[0].tag[0]) {
+
+            snprintf(
+                tag_leader,
+                sizeof(tag_leader),
+                "t%s",
+                controls->leadtvar[0].tag
+            );
+
+        } else {
+
+            snprintf(
+                tag_leader,
+                sizeof(tag_leader),
+                "t"
+            );
+        }
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * TAG DO ARQUIVO
+     * --------------------------------------------------------
+     */
+
+    const char *tag =
+        tags_get(
+            controls,
+            filename
+        );
+
+
+    /*
+     * --------------------------------------------------------
+     * NOME + TAG
+     * --------------------------------------------------------
+     */
+
+    char filename_with_tag[PATH_MAX + 64];
+
+
+    if (tag) {
+
+        snprintf(
+            filename_with_tag,
+            sizeof(filename_with_tag),
+            "%s %s",
+            filename,
+            tag
+        );
+
+    } else {
+
+        snprintf(
+            filename_with_tag,
+            sizeof(filename_with_tag),
+            "%s",
+            filename
+        );
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * LEADER FINAL
+     * --------------------------------------------------------
+     */
+
+    char active_leader[128];
+
+    active_leader[0] = '\0';
+
+
+    if (leader[0] &&
+        tag_leader[0]) {
+
+        snprintf(
+            active_leader,
+            sizeof(active_leader),
+            "%s / %s",
+            leader,
+            tag_leader
+        );
+
+    } else if (leader[0]) {
+
+        snprintf(
+            active_leader,
+            sizeof(active_leader),
+            "%s",
+            leader
+        );
+
+    } else if (tag_leader[0]) {
+
+        snprintf(
+            active_leader,
+            sizeof(active_leader),
+            "%s",
+            tag_leader
+        );
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * LABEL
+     * --------------------------------------------------------
+     */
+
+    char text[16384];
+
+
     if (controls->message[0]) {
 
-        if (leader[0]) {
+        if (active_leader[0]) {
 
             snprintf(
                 text,
@@ -222,9 +1050,9 @@ static gboolean update_info_label(
                 dur_min,
                 dur_seconds,
                 percent,
-                filename,
+                filename_with_tag,
                 controls->message,
-                leader
+                active_leader
             );
 
         } else {
@@ -240,14 +1068,14 @@ static gboolean update_info_label(
                 dur_min,
                 dur_seconds,
                 percent,
-                filename,
+                filename_with_tag,
                 controls->message
             );
         }
 
     } else {
 
-        if (leader[0]) {
+        if (active_leader[0]) {
 
             snprintf(
                 text,
@@ -260,8 +1088,8 @@ static gboolean update_info_label(
                 dur_min,
                 dur_seconds,
                 percent,
-                filename,
-                leader
+                filename_with_tag,
+                active_leader
             );
 
         } else {
@@ -276,7 +1104,7 @@ static gboolean update_info_label(
                 dur_min,
                 dur_seconds,
                 percent,
-                filename
+                filename_with_tag
             );
         }
     }
@@ -290,6 +1118,7 @@ static gboolean update_info_label(
 
     return G_SOURCE_CONTINUE;
 }
+
 
 /* ============================================================
  * MENSAGEM NO LABEL
@@ -458,6 +1287,7 @@ static void jump_backward(
     }
 }
 
+
 /* ============================================================
  * ARQUIVO ANTERIOR
  * ============================================================ */
@@ -491,8 +1321,6 @@ static void previous_file(
                 filename
             );
         }
-
-
 
     } else {
 
@@ -538,7 +1366,6 @@ static void next_file(
             );
         }
 
-
     } else {
 
         show_message(
@@ -568,6 +1395,7 @@ static gboolean on_key_pressed(
     if (!controls)
         return FALSE;
 
+
     Player *player = NULL;
 
 
@@ -581,14 +1409,16 @@ static gboolean on_key_pressed(
     }
 
 
-    /* --------------------------------------------------------
-     * ESC -> SAI DO LEADER
-     * -------------------------------------------------------- */
+    /* ========================================================
+     * ESC
+     * ======================================================== */
 
     if (keyval == GDK_KEY_Escape) {
 
         controls->leadf = FALSE;
         controls->leadfvar = '\0';
+
+        controls->leadt = FALSE;
 
         fprintf(
             stderr,
@@ -598,9 +1428,10 @@ static gboolean on_key_pressed(
         return TRUE;
     }
 
-    /* --------------------------------------------------------
-     * F -> LEADER
-     * -------------------------------------------------------- */
+
+    /* ========================================================
+     * F -> LEADER F
+     * ======================================================== */
 
     if (keyval == GDK_KEY_f) {
 
@@ -609,23 +1440,125 @@ static gboolean on_key_pressed(
 
         fprintf(
             stderr,
-            "[LEADER] ON\n"
+            "[LEADER] F ON\n"
         );
 
         return TRUE;
     }
 
 
-    /* --------------------------------------------------------
-     * LEADER
+    /* ========================================================
+     * T -> LEADER T
+     * ======================================================== */
+
+    if (keyval == GDK_KEY_t) {
+
+        controls->leadt = TRUE;
+
+        fprintf(
+            stderr,
+            "[LEADER] T ON\n"
+        );
+
+        return TRUE;
+    }
+
+
+    /* ========================================================
+     * LEADER T
      *
-     * f  -> ativa leader
-     * fb -> brightness
-     * fc -> contrast
-     * fp -> screenshot
+     * ta
+     * tb
+     * tc
+     * ...
      *
-     * O leader NÃO bloqueia outras teclas.
-     * -------------------------------------------------------- */
+     * Qualquer letra cria/substitui a tag.
+     * ======================================================== */
+
+    if (controls->leadt) {
+
+        /*
+         * Somente letras.
+         */
+
+        if ((keyval >= GDK_KEY_a &&
+             keyval <= GDK_KEY_z) ||
+            (keyval >= GDK_KEY_A &&
+             keyval <= GDK_KEY_Z)) {
+
+            char tag_letter;
+
+
+            if (keyval >= GDK_KEY_A &&
+                keyval <= GDK_KEY_Z) {
+
+                tag_letter =
+                    (char)('a' +
+                    (keyval - GDK_KEY_A));
+
+            } else {
+
+                tag_letter =
+                    (char)keyval;
+            }
+
+
+            const char *filename =
+                player_get_filename(
+                    player
+                );
+
+
+            if (filename) {
+
+                char tag[4];
+
+
+                snprintf(
+                    tag,
+                    sizeof(tag),
+                    "t%c",
+                    tag_letter
+                );
+
+
+                tag_file(
+                    controls,
+                    filename,
+                    tag
+                );
+
+
+                char message[PATH_MAX + 64];
+
+
+                snprintf(
+                    message,
+                    sizeof(message),
+                    "tag: %s",
+                    tag
+                );
+
+
+                show_message(
+                    controls,
+                    message
+                );
+            }
+
+
+            /*
+             * Continua no leader t.
+             */
+
+            return TRUE;
+        }
+    }
+
+
+    /* ========================================================
+     * LEADER F
+     * ======================================================== */
 
     if (controls->leadf) {
 
@@ -663,6 +1596,7 @@ static gboolean on_key_pressed(
 
             return TRUE;
         }
+
 
         /* ----------------------------------------------------
          * S -> SATURATION
@@ -721,6 +1655,7 @@ static gboolean on_key_pressed(
             return TRUE;
         }
 
+
         /* ----------------------------------------------------
          * P -> SCREENSHOT
          *
@@ -774,21 +1709,9 @@ static gboolean on_key_pressed(
             }
 
 
-            /*
-             * Continua dentro do leader.
-             *
-             * Portanto:
-             *
-             * f -> fp
-             *
-             * e depois ainda pode:
-             *
-             * fb
-             * fc
-             */
-
             return TRUE;
         }
+
 
         /* ----------------------------------------------------
          * Z -> ZOOM
@@ -919,9 +1842,12 @@ static gboolean on_key_pressed(
         }
     }
 
+
     /* ========================================================
      * A PARTIR DAQUI CONTINUA O TECLADO NORMAL
+     * TECLADO NORMAL
      * ======================================================== */
+
 
     /* --------------------------------------------------------
      * Q -> SAIR
@@ -930,14 +1856,12 @@ static gboolean on_key_pressed(
     if (keyval == GDK_KEY_q ||
         keyval == GDK_KEY_Q) {
 
-
         if (controls->window) {
 
             gtk_window_destroy(
                 GTK_WINDOW(controls->window)
             );
         }
-
 
         return TRUE;
     }
@@ -972,7 +1896,7 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * l MAIÚSCULO -> RETROCEDE FILE_JUMP ARQUIVOS
+     * l -> VOLTA 20 ARQUIVOS
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_l) {
@@ -986,7 +1910,7 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * h MAIÚSCULO -> AVANÇA FILE_JUMP ARQUIVOS
+     * h -> AVANÇA 20 ARQUIVOS
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_h) {
@@ -998,8 +1922,9 @@ static gboolean on_key_pressed(
         return TRUE;
     }
 
+
     /* --------------------------------------------------------
-     * SPACE / ENTER -> PAUSE / PLAY
+     * SPACE / ENTER
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_space ||
@@ -1015,6 +1940,7 @@ static gboolean on_key_pressed(
         return TRUE;
     }
 
+
     /* --------------------------------------------------------
      * . -> FRAME ANTERIOR
      * -------------------------------------------------------- */
@@ -1028,7 +1954,6 @@ static gboolean on_key_pressed(
             );
         }
 
-
         return TRUE;
     }
 
@@ -1037,7 +1962,8 @@ static gboolean on_key_pressed(
      * n -> PRÓXIMO FRAME
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_n || keyval == GDK_KEY_N) {
+    if (keyval == GDK_KEY_n ||
+        keyval == GDK_KEY_N) {
 
         if (player) {
 
@@ -1046,12 +1972,12 @@ static gboolean on_key_pressed(
             );
         }
 
-
         return TRUE;
     }
 
+
     /* --------------------------------------------------------
-     * M -> SEEK_HARD_SECONDS SEGUNDOS
+     * M -> SEEK +10
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_M) {
@@ -1069,7 +1995,7 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * < -> SEEK_HARD_SECONDS SEGUNDOS
+     * < -> SEEK -10
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_less) {
@@ -1082,12 +2008,12 @@ static gboolean on_key_pressed(
             );
         }
 
-
         return TRUE;
     }
 
+
     /* --------------------------------------------------------
-     * m -> AVANÇA SEGUNDOS
+     * m -> SEEK +3
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_m) {
@@ -1105,7 +2031,7 @@ static gboolean on_key_pressed(
 
 
     /* --------------------------------------------------------
-     * , -> RETROCEDE SEGUNDOS
+     * , -> SEEK -3
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_comma) {
@@ -1118,9 +2044,9 @@ static gboolean on_key_pressed(
             );
         }
 
-
         return TRUE;
     }
+
 
     /* --------------------------------------------------------
      * V -> VOLUME +
@@ -1136,9 +2062,9 @@ static gboolean on_key_pressed(
             );
         }
 
-
         return TRUE;
     }
+
 
     /* --------------------------------------------------------
      * C -> VOLUME -
@@ -1154,12 +2080,12 @@ static gboolean on_key_pressed(
             );
         }
 
-
         return TRUE;
     }
 
+
     /* --------------------------------------------------------
-     * x -> VOLUME 0
+     * X -> VOLUME 0
      * -------------------------------------------------------- */
 
     if (keyval == GDK_KEY_X) {
@@ -1171,7 +2097,6 @@ static gboolean on_key_pressed(
                 -200
             );
         }
-
 
         return TRUE;
     }
@@ -1187,7 +2112,6 @@ static gboolean on_key_pressed(
         copy_video_path(
             controls
         );
-
 
         return TRUE;
     }
@@ -1207,7 +2131,6 @@ static gboolean on_key_pressed(
             );
         }
 
-
         return TRUE;
     }
 
@@ -1224,7 +2147,6 @@ static gboolean on_key_pressed(
                 player
             );
         }
-
 
         return TRUE;
     }
@@ -1290,14 +2212,6 @@ static gboolean on_scroll(
     if (controls->leadf &&
         controls->leadfvar == 'b') {
 
-        /*
-         * Scroll para cima:
-         * brightness +
-         *
-         * Scroll para baixo:
-         * brightness -
-         */
-
         player_change_brightness(
             player,
             (dy < 0.0) ? 1 : -1
@@ -1306,20 +2220,13 @@ static gboolean on_scroll(
         return TRUE;
     }
 
+
     /* --------------------------------------------------------
      * FC -> CONTRAST
      * -------------------------------------------------------- */
 
     if (controls->leadf &&
         controls->leadfvar == 'c') {
-
-        /*
-         * Scroll para cima:
-         * contrast +
-         *
-         * Scroll para baixo:
-         * contrast -
-         */
 
         player_change_contrast(
             player,
@@ -1329,20 +2236,13 @@ static gboolean on_scroll(
         return TRUE;
     }
 
+
     /* --------------------------------------------------------
      * FS -> SATURATION
      * -------------------------------------------------------- */
 
     if (controls->leadf &&
         controls->leadfvar == 's') {
-
-        /*
-         * Scroll para cima:
-         * saturation +
-         *
-         * Scroll para baixo:
-         * saturation -
-         */
 
         player_change_saturation(
             player,
@@ -1382,14 +2282,6 @@ static gboolean on_scroll(
     if (controls->leadf &&
         controls->leadfvar == 'v') {
 
-        /*
-         * Scroll para cima:
-         * volume +
-         *
-         * Scroll para baixo:
-         * volume -
-         */
-
         player_change_volume(
             player,
             (dy < 0.0) ? 5 : -5
@@ -1398,15 +2290,11 @@ static gboolean on_scroll(
         return TRUE;
     }
 
+
     /*
-     * Sem leader de scroll:
+     * Leader T não usa scroll.
      *
-     * fz -> zoom
-     * fb -> brightness
-     * fc -> contrast
-     * fv -> volume
-     *
-     * Fora desses modos o scroll não faz nada.
+     * t + letra = tag
      */
 
     return FALSE;
@@ -1571,6 +2459,7 @@ static gboolean grab_gl_focus(
     return G_SOURCE_REMOVE;
 }
 
+
 /* ============================================================
  * SETUP
  * ============================================================ */
@@ -1611,13 +2500,87 @@ void controls_setup(
     }
 
 
-    controls->window = window;
-    controls->gl_area = gl_area;
-    controls->info_label = info_label;
-    controls->app = app;
+    controls->window =
+        window;
 
-    controls->leadf = FALSE;
-    controls->leadfvar = '\0';
+    controls->gl_area =
+        gl_area;
+
+    controls->info_label =
+        info_label;
+
+    controls->app =
+        app;
+
+
+    /*
+     * Leader F.
+     */
+
+    controls->leadf =
+        FALSE;
+
+    controls->leadfvar =
+        '\0';
+
+
+    /*
+     * Leader T.
+     */
+
+    controls->leadt =
+        FALSE;
+
+    controls->leadt_count =
+        0;
+
+
+    controls->tags_directory[0] =
+        '\0';
+
+    controls->tags_file[0] =
+        '\0';
+
+
+    /*
+     * --------------------------------------------------------
+     * CARREGA TAGS DA PASTA DO PRIMEIRO ARQUIVO
+     * --------------------------------------------------------
+     */
+
+    Player *player =
+        render_get_player(
+            app->render
+        );
+
+
+    if (player) {
+
+        const char *filename =
+            player_get_filename(
+                player
+            );
+
+
+        if (filename) {
+
+            char directory[PATH_MAX];
+
+
+            if (get_file_directory(
+                    filename,
+                    directory,
+                    sizeof(directory)
+                ) == 0) {
+
+                tags_load(
+                    controls,
+                    directory
+                );
+            }
+        }
+    }
+
 
     fprintf(
         stderr,
@@ -1625,9 +2588,9 @@ void controls_setup(
     );
 
 
-    /* --------------------------------------------------------
+    /* ========================================================
      * DRAG
-     * -------------------------------------------------------- */
+     * ======================================================== */
 
     GtkGestureDrag *drag =
         GTK_GESTURE_DRAG(
@@ -1665,9 +2628,9 @@ void controls_setup(
     );
 
 
-    /* --------------------------------------------------------
+    /* ========================================================
      * SCROLL
-     * -------------------------------------------------------- */
+     * ======================================================== */
 
     GtkEventControllerScroll *scroll_controller =
         GTK_EVENT_CONTROLLER_SCROLL(
@@ -1691,9 +2654,9 @@ void controls_setup(
     );
 
 
-    /* --------------------------------------------------------
+    /* ========================================================
      * FOCUS
-     * -------------------------------------------------------- */
+     * ======================================================== */
 
     gtk_widget_set_focusable(
         gl_area,
@@ -1701,9 +2664,9 @@ void controls_setup(
     );
 
 
-    /* --------------------------------------------------------
+    /* ========================================================
      * KEYBOARD
-     * -------------------------------------------------------- */
+     * ======================================================== */
 
     GtkEventControllerKey *key_controller =
         GTK_EVENT_CONTROLLER_KEY(
@@ -1730,9 +2693,10 @@ void controls_setup(
         GTK_EVENT_CONTROLLER(key_controller)
     );
 
-    /* --------------------------------------------------------
+
+    /* ========================================================
      * FOCO INICIAL
-     * -------------------------------------------------------- */
+     * ======================================================== */
 
     g_idle_add(
         grab_gl_focus,
@@ -1740,12 +2704,9 @@ void controls_setup(
     );
 
 
-    /* --------------------------------------------------------
+    /* ========================================================
      * TIMER DO INFO LABEL
-     *
-     * Atualiza posição/duração aproximadamente 4 vezes
-     * por segundo.
-     * -------------------------------------------------------- */
+     * ======================================================== */
 
     controls->info_timer_id =
         g_timeout_add(
