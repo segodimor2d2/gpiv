@@ -6,6 +6,381 @@ make
 ./gpiv tst1.mp4
 ```
 
+
+---
+
+### Mapa de comandos
+
+| Tecla             | Comando          | Comportamento             |
+| ----------------- | ---------------- | ------------------------- |
+| `q` / `Q`         | Sair             | Fecha o `gpiv`            |
+| `Space` / `Enter` | Play/Pause       | Pausa ou continua o vídeo |
+| `j`               | Próximo arquivo  | Avança 1 arquivo          |
+| `k`               | Arquivo anterior | Volta 1 arquivo           |
+| `h`               | Salto +20        | Avança 20 arquivos        |
+| `l`               | Salto -20        | Volta 20 arquivos         |
+| `n` / `N`         | Frame +1         | Avança 1 frame            |
+| `.`               | Frame -1         | Volta 1 frame             |
+| `m`               | Seek +3s         | Avança 3 segundos         |
+| `,`               | Seek -3s         | Volta 3 segundos          |
+| `M`               | Seek +10s        | Avança 10 segundos        |
+| `<`               | Seek -10s        | Volta 10 segundos         |
+| `V`               | Volume +5        | Aumenta volume            |
+| `C`               | Volume -5        | Diminui volume            |
+| `X`               | Volume 0         | Coloca volume em zero     |
+| `y` / `Y`         | Copiar path      | Copia o caminho do vídeo  |
+| `r` / `R`         | Rotacionar       | Rotaciona vídeo 90°       |
+| `z`               | Reset view       | Reseta zoom e pan         |
+| `Esc`             | Cancelar leader  | Desativa `f` e `t`        |
+
+### Leader `t` — Tags
+
+```text
+t
+```
+
+Ativa o leader de tags.
+
+Depois:
+
+| Sequência | Resultado      |
+| --------- | -------------- |
+| `t` + `a` | Salva tag `ta` |
+| `t` + `b` | Salva tag `tb` |
+| `t` + `c` | Salva tag `tc` |
+| ...       | ...            |
+| `t` + `z` | Salva tag `tz` |
+
+Depois da letra, o leader `t` é automaticamente desligado.
+
+Exemplo:
+
+```text
+t → a
+```
+
+salva:
+
+```text
+arquivo.mp4,ta
+```
+
+---
+
+### Leader `f`
+
+Primeiro:
+
+```text
+f
+```
+
+ativa o leader `f`.
+
+Depois:
+
+| Sequência | Função                                              |
+| --------- | --------------------------------------------------- |
+| `fb`      | Brightness                                          |
+| `fc`      | Contrast                                            |
+| `fs`      | Saturation                                          |
+| `fg`      | Gamma                                               |
+| `fv`      | Volume                                              |
+| `fp`      | Screenshot                                          |
+| `fz`      | Zoom                                                |
+| `fr`      | Criar diretórios das tags                           |
+| `fR`      | Pré-validar/mover arquivos para diretórios das tags |
+
+---
+
+### Leader `fb` — Brightness
+
+```text
+f → b
+```
+
+Depois:
+
+| Tecla     | Ação          |
+| --------- | ------------- |
+| `u` / `U` | Brightness +1 |
+| `i` / `I` | Brightness -1 |
+| Scroll ↑  | Brightness +1 |
+| Scroll ↓  | Brightness -1 |
+
+---
+
+### Leader `fc` — Contrast
+
+```text
+f → c
+```
+
+| Tecla     | Ação        |
+| --------- | ----------- |
+| `u` / `U` | Contrast +1 |
+| `i` / `I` | Contrast -1 |
+| Scroll ↑  | Contrast +1 |
+| Scroll ↓  | Contrast -1 |
+
+---
+
+### Leader `fs` — Saturation
+
+```text
+f → s
+```
+
+| Tecla     | Ação          |
+| --------- | ------------- |
+| `u` / `U` | Saturation +1 |
+| `i` / `I` | Saturation -1 |
+| Scroll ↑  | Saturation +1 |
+| Scroll ↓  | Saturation -1 |
+
+---
+
+### Leader `fg` — Gamma
+
+```text
+f → g
+```
+
+| Tecla     | Ação     |
+| --------- | -------- |
+| `u` / `U` | Gamma +1 |
+| `i` / `I` | Gamma -1 |
+| Scroll ↑  | Gamma +1 |
+| Scroll ↓  | Gamma -1 |
+
+---
+
+### Leader `fv` — Volume
+
+```text
+f → v
+```
+
+| Ação     | Resultado |
+| -------- | --------- |
+| Scroll ↑ | Volume +5 |
+| Scroll ↓ | Volume -5 |
+
+---
+
+### Leader `fz` — Zoom
+
+```text
+f → z
+```
+
+| Tecla/Ação | Resultado |
+| ---------- | --------- |
+| `u` / `U`  | Zoom +    |
+| `i` / `I`  | Zoom -    |
+| Scroll ↑   | Zoom +    |
+| Scroll ↓   | Zoom -    |
+
+O `z` sozinho, fora do leader, continua sendo:
+
+```text
+z
+```
+
+→ reset de zoom/pan.
+
+---
+
+### Leader `fp` — Screenshot
+
+```text
+f → p
+```
+
+Executa imediatamente o screenshot.
+
+O resultado aparece no label, por exemplo:
+
+```text
+screenshot salvo: /caminho/arquivo.jpg
+```
+
+---
+
+### `fr` — Criar pastas das tags
+
+```text
+f → r
+```
+
+Percorre as tags existentes no `tags.csv`, elimina duplicadas e cria:
+
+```text
+/videos/ta/
+/videos/tb/
+/videos/tc/
+```
+
+Se a pasta já existir, ela não é recriada.
+
+---
+
+### `fR` — Organizar arquivos pelas tags
+
+```text
+f → R
+```
+
+Esse é o comando que você está implementando agora.
+
+A intenção é:
+
+```text
+/videos/
+├── video1.mp4   → ta
+├── video2.mp4   → tb
+├── video3.mp4   → ta
+└── tags.csv
+```
+
+resultar em:
+
+```text
+/videos/
+├── ta/
+│   ├── video1.mp4
+│   └── video3.mp4
+├── tb/
+│   └── video2.mp4
+└── tags202608271657.md
+```
+
+Com colisão:
+
+```text
+video1.mp4
+video1_bis_1.mp4
+video1_bis_2.mp4
+...
+```
+
+E a ideia é que o `fR` faça **pré-validação antes de mover qualquer arquivo**.
+
+---
+
+### Scroll normal
+
+Sem nenhum leader ativo, o scroll não executa alteração.
+
+Com leader:
+
+```text
+fb → brightness
+fc → contrast
+fs → saturation
+fg → gamma
+fv → volume
+fz → zoom
+```
+
+---
+
+### Arrastar com mouse
+
+O `GtkGestureDrag` está configurado para:
+
+```text
+arrastar → pan do vídeo
+```
+
+Com:
+
+```text
+drag-begin
+    ↓
+player_pan_begin()
+
+drag-update
+    ↓
+player_pan_update()
+
+drag-end
+    ↓
+player_pan_end()
+```
+
+---
+
+### Resumo visual
+
+```text
+CONTROLS
+│
+├── q/Q          sair
+├── Space/Enter  play/pause
+│
+├── j            próximo arquivo
+├── k            arquivo anterior
+├── h            +20 arquivos
+├── l            -20 arquivos
+│
+├── n/N          próximo frame
+├── .            frame anterior
+│
+├── m            +3s
+├── ,            -3s
+├── M            +10s
+├── <            -10s
+│
+├── V            volume +5
+├── C            volume -5
+├── X            volume 0
+├── y/Y          copiar path
+├── r/R          rotacionar
+├── z            reset zoom/pan
+│
+├── t
+│   └── letra    tag (ta, tb, tc...)
+│
+├── f
+│   ├── b        brightness
+│   │   ├── u    +
+│   │   ├── i    -
+│   │   └── scroll
+│   │
+│   ├── c        contrast
+│   │   ├── u    +
+│   │   ├── i    -
+│   │   └── scroll
+│   │
+│   ├── s        saturation
+│   │   ├── u    +
+│   │   ├── i    -
+│   │   └── scroll
+│   │
+│   ├── g        gamma
+│   │   ├── u    +
+│   │   ├── i    -
+│   │   └── scroll
+│   │
+│   ├── v        volume
+│   │   └── scroll
+│   │
+│   ├── p        screenshot
+│   │
+│   ├── z        zoom
+│   │   ├── u    +
+│   │   ├── i    -
+│   │   └── scroll
+│   │
+│   ├── r        criar diretórios das tags
+│   │
+│   └── R        mover arquivos pelas tags
+│
+└── Esc          cancelar leaders
+```
+
+
 ---
 ### Estado atual
 
@@ -359,3 +734,6 @@ videos/
 ```
 
 Esse mapa deixa o próximo passo bem definido: **não precisamos criar outro sistema de comandos**. Basta transformar o significado de `fp` de screenshot para **"processar/mover arquivos tagueados"**, mantendo `fr` como **"criar diretórios"** e `t + letra` como **"taguear"**.
+
+
+

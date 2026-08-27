@@ -12,6 +12,8 @@
 #include <sys/stat.h>
 #include <errno.h>
 
+#include <sys/wait.h>
+#include <unistd.h>
 
 /* ============================================================
  * CONFIGURAÇÃO
@@ -3241,6 +3243,330 @@ static void next_file(
     }
 }
 
+/* ============================================================
+ * DETECTAR FORMATO DO VIDEO COM FFPROBE
+ * ============================================================ */
+
+static void detect_video_format(
+    Controls *controls,
+    const char *filename
+)
+{
+    if (!controls || !filename || !filename[0])
+        return;
+
+    char command[PATH_MAX + 512];
+
+    int written =
+        snprintf(
+            command,
+            sizeof(command),
+
+            "ffprobe -v error "
+            "-show_entries "
+            "format=format_name:stream="
+            "codec_name,pix_fmt,width,height "
+            "-select_streams v:0 "
+            "-of default=noprint_wrappers=1 "
+            "-- \"%s\"",
+
+            filename
+        );
+
+    if (written < 0 ||
+        (size_t)written >= sizeof(command)) {
+
+        show_message(
+            controls,
+            "Erro: caminho do video muito longo"
+        );
+
+        return;
+    }
+
+    /*
+     * --------------------------------------------------------
+     * VIDEO
+     * --------------------------------------------------------
+     */
+
+    FILE *video_pipe =
+        popen(
+            command,
+            "r"
+        );
+
+    if (!video_pipe) {
+
+        show_message(
+            controls,
+            "Erro: nao foi possivel executar ffprobe"
+        );
+
+        return;
+    }
+
+    char line[1024];
+
+    char video_codec[256] = "";
+    char pixel_format[256] = "";
+    char width[64] = "";
+    char height[64] = "";
+
+    while (fgets(line, sizeof(line), video_pipe)) {
+
+        line[strcspn(line, "\r\n")] = '\0';
+
+        if (strncmp(line, "codec_name=", 11) == 0) {
+
+            snprintf(
+                video_codec,
+                sizeof(video_codec),
+                "%s",
+                line + 11
+            );
+
+        } else if (strncmp(line, "pix_fmt=", 8) == 0) {
+
+            snprintf(
+                pixel_format,
+                sizeof(pixel_format),
+                "%s",
+                line + 8
+            );
+
+        } else if (strncmp(line, "width=", 6) == 0) {
+
+            snprintf(
+                width,
+                sizeof(width),
+                "%s",
+                line + 6
+            );
+
+        } else if (strncmp(line, "height=", 7) == 0) {
+
+            snprintf(
+                height,
+                sizeof(height),
+                "%s",
+                line + 7
+            );
+        }
+    }
+
+    int video_status =
+        pclose(video_pipe);
+
+    if (video_status == -1 ||
+        !WIFEXITED(video_status) ||
+        WEXITSTATUS(video_status) != 0) {
+
+        show_message(
+            controls,
+            "Erro: ffprobe nao conseguiu ler o video"
+        );
+
+        return;
+    }
+
+    /*
+     * --------------------------------------------------------
+     * CONTAINER
+     * --------------------------------------------------------
+     */
+
+    written =
+        snprintf(
+            command,
+            sizeof(command),
+
+            "ffprobe -v error "
+            "-show_entries format=format_name "
+            "-of default=noprint_wrappers=1:nokey=1 "
+            "-- \"%s\"",
+
+            filename
+        );
+
+    if (written < 0 ||
+        (size_t)written >= sizeof(command)) {
+
+        show_message(
+            controls,
+            "Erro: comando ffprobe muito longo"
+        );
+
+        return;
+    }
+
+    FILE *format_pipe =
+        popen(
+            command,
+            "r"
+        );
+
+    if (!format_pipe) {
+
+        show_message(
+            controls,
+            "Erro ao detectar container"
+        );
+
+        return;
+    }
+
+    char format[256] = "";
+
+    if (fgets(format, sizeof(format), format_pipe)) {
+
+        format[strcspn(format, "\r\n")] = '\0';
+    }
+
+    int format_status =
+        pclose(format_pipe);
+
+    if (format_status == -1 ||
+        !WIFEXITED(format_status) ||
+        WEXITSTATUS(format_status) != 0) {
+
+        show_message(
+            controls,
+            "Erro ao detectar container"
+        );
+
+        return;
+    }
+
+    /*
+     * --------------------------------------------------------
+     * AUDIO
+     * --------------------------------------------------------
+     */
+
+    written =
+        snprintf(
+            command,
+            sizeof(command),
+
+            "ffprobe -v error "
+            "-select_streams a:0 "
+            "-show_entries stream=codec_name "
+            "-of default=noprint_wrappers=1:nokey=1 "
+            "-- \"%s\"",
+
+            filename
+        );
+
+    if (written < 0 ||
+        (size_t)written >= sizeof(command)) {
+
+        show_message(
+            controls,
+            "Erro: comando ffprobe muito longo"
+        );
+
+        return;
+    }
+
+    FILE *audio_pipe =
+        popen(
+            command,
+            "r"
+        );
+
+    if (!audio_pipe) {
+
+        show_message(
+            controls,
+            "Erro ao detectar audio"
+        );
+
+        return;
+    }
+
+    char audio_codec[256] = "";
+
+    if (fgets(audio_codec, sizeof(audio_codec), audio_pipe)) {
+
+        audio_codec[
+            strcspn(audio_codec, "\r\n")
+        ] = '\0';
+    }
+
+    int audio_status =
+        pclose(audio_pipe);
+
+    /*
+     * Não consideramos ausência de áudio como erro.
+     */
+
+    if (audio_status == -1) {
+
+        snprintf(
+            audio_codec,
+            sizeof(audio_codec),
+            "?"
+        );
+    }
+
+    /*
+     * --------------------------------------------------------
+     * RESULTADO
+     * --------------------------------------------------------
+     */
+
+    char message[4096];
+
+    written =
+        snprintf(
+            message,
+            sizeof(message),
+
+            "formato: %s | video: %s | "
+            "pixel: %s | %sx%s | audio: %s",
+
+            format[0] ?
+                format : "?",
+
+            video_codec[0] ?
+                video_codec : "?",
+
+            pixel_format[0] ?
+                pixel_format : "?",
+
+            width[0] ?
+                width : "?",
+
+            height[0] ?
+                height : "?",
+
+            audio_codec[0] ?
+                audio_codec : "?"
+        );
+
+    if (written < 0 ||
+        (size_t)written >= sizeof(message)) {
+
+        show_message(
+            controls,
+            "Erro: informacoes do video muito longas"
+        );
+
+        return;
+    }
+
+    show_message(
+        controls,
+        message
+    );
+
+    fprintf(
+        stderr,
+        "[fW] %s\n",
+        message
+    );
+}
 
 /* ============================================================
  * KEYBOARD
@@ -3883,6 +4209,63 @@ static gboolean on_key_pressed(
             controls->leadf = FALSE;
             controls->leadfvar = '\0';
 
+
+            return TRUE;
+        }
+
+
+        /* ----------------------------------------------------
+         * w -> DETECTAR FORMATO DO VIDEO
+         *
+         * fw
+         *
+         * Usa ffprobe para descobrir:
+         *
+         * container
+         * codec de video
+         * pixel format
+         * resolucao
+         * codec de audio
+         * ---------------------------------------------------- */
+
+        if (keyval == GDK_KEY_w) {
+
+            fprintf(
+                stderr,
+                "[LEADER] fw\n"
+            );
+
+            const char *filename =
+                player_app_get_filename(
+                    controls->app
+                );
+
+            if (!filename ||
+                !filename[0]) {
+
+                show_message(
+                    controls,
+                    "Nenhum video carregado"
+                );
+
+                controls->leadf = FALSE;
+                controls->leadfvar = '\0';
+
+                return TRUE;
+            }
+
+            detect_video_format(
+                controls,
+                filename
+            );
+
+            controls->leadf = FALSE;
+            controls->leadfvar = '\0';
+
+            fprintf(
+                stderr,
+                "[LEADER] fw OFF\n"
+            );
 
             return TRUE;
         }
