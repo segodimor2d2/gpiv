@@ -8,6 +8,9 @@
 #include <string.h>
 #include <limits.h>
 
+#include <sys/stat.h>
+#include <errno.h>
+
 
 /* ============================================================
  * CONFIGURAÇÃO
@@ -20,6 +23,7 @@
 #define MAX_TAGS 4096
 #define MAX_TAG_LENGTH 32
 
+#define MAX_DIR_TAGS MAX_TAGS
 
 /* ============================================================
  * TAG
@@ -89,6 +93,16 @@ typedef struct {
 
     int leadt_count;
 
+    /*
+     * --------------------------------------------------------
+     * DIRETÓRIOS DE TAGS
+     * --------------------------------------------------------
+     */
+
+    char dirtags[MAX_DIR_TAGS][MAX_TAG_LENGTH];
+
+    int dirtags_count;
+
 
     /*
      * Pasta atualmente carregada.
@@ -102,6 +116,32 @@ typedef struct {
 
 } Controls;
 
+
+/* ============================================================
+ * PROTÓTIPOS DIRTAGS
+ * ============================================================ */
+
+static void dirtags_clear(
+    Controls *controls
+);
+
+static void dirtags_add_unique(
+    Controls *controls,
+    const char *tag
+);
+
+static void dirtags_build(
+    Controls *controls
+);
+
+static void dirtags_create_directories(
+    Controls *controls
+);
+
+static void show_message(
+    Controls *controls,
+    const char *message
+);
 
 /* ============================================================
  * RETORNA DIRETÓRIO DO ARQUIVO
@@ -242,8 +282,199 @@ static void tags_clear(
 
 
 /* ============================================================
+ * CRIA DIRS
+ * ============================================================ */
+
+static void dirtags_create_directories(
+    Controls *controls)
+{
+    if (!controls ||
+        !controls->tags_directory[0])
+        return;
+
+
+    char message[4096];
+
+    message[0] = '\0';
+
+
+    for (int i = 0;
+         i < controls->dirtags_count;
+         i++) {
+
+        char directory[PATH_MAX];
+
+
+        int written =
+            snprintf(
+                directory,
+                sizeof(directory),
+                "%s/%s",
+                controls->tags_directory,
+                controls->dirtags[i]
+            );
+
+
+        if (written < 0 ||
+            (size_t)written >= sizeof(directory)) {
+
+            fprintf(
+                stderr,
+                "[DIRTAGS] caminho muito longo: %s\n",
+                controls->dirtags[i]
+            );
+
+            continue;
+        }
+
+
+        gboolean created = FALSE;
+
+
+        if (mkdir(
+                directory,
+                0755
+            ) == 0) {
+
+            created = TRUE;
+
+            fprintf(
+                stderr,
+                "[DIRTAGS] diretório criado: %s\n",
+                directory
+            );
+
+        } else if (errno == EEXIST) {
+
+            fprintf(
+                stderr,
+                "[DIRTAGS] já existe: %s\n",
+                directory
+            );
+
+        } else {
+
+            fprintf(
+                stderr,
+                "[DIRTAGS] erro criando: %s: %s\n",
+                directory,
+                strerror(errno)
+            );
+
+            continue;
+        }
+
+
+        /*
+         * Adiciona ao texto que será mostrado no label.
+         */
+
+        size_t used =
+            strlen(message);
+
+
+        if (created) {
+
+            snprintf(
+                message + used,
+                sizeof(message) - used,
+                "%s%s criado: %s",
+                used ? "\n" : "",
+                controls->dirtags[i],
+                directory
+            );
+
+        } else {
+
+            snprintf(
+                message + used,
+                sizeof(message) - used,
+                "%s%s já existe: %s",
+                used ? "\n" : "",
+                controls->dirtags[i],
+                directory
+            );
+        }
+    }
+
+
+    /*
+     * Mostra o resultado no final do label.
+     */
+
+    if (message[0]) {
+
+        show_message(
+            controls,
+            message
+        );
+    }
+}
+
+/* ============================================================
+ * MONTA DIRTAGS COM LEADTVAR
+ * ============================================================ */
+
+static void dirtags_build(
+    Controls *controls)
+{
+    if (!controls)
+        return;
+
+
+    /*
+     * Começa sempre com lista vazia.
+     */
+
+    dirtags_clear(
+        controls
+    );
+
+
+    /*
+     * Percorre todas as tags carregadas.
+     */
+
+    for (int i = 0;
+         i < controls->leadt_count;
+         i++) {
+
+        const char *tag =
+            controls->leadtvar[i].tag;
+
+
+        if (!tag ||
+            !tag[0])
+            continue;
+
+
+        dirtags_add_unique(
+            controls,
+            tag
+        );
+    }
+
+
+    fprintf(
+        stderr,
+        "[DIRTAGS] tags únicas: %d\n",
+        controls->dirtags_count
+    );
+
+
+    /*
+     * Cria os diretórios.
+     */
+
+    dirtags_create_directories(
+        controls
+    );
+}
+
+/* ============================================================
  * PROCURA TAG DE UM ARQUIVO
  * ============================================================ */
+
 
 static int tags_find(
     Controls *controls,
@@ -324,6 +555,103 @@ static void remove_newline(
 
         length--;
     }
+}
+
+
+/* ============================================================
+ * LIMPAR DIRTAGS
+ * ============================================================ */
+
+static void dirtags_clear(
+    Controls *controls)
+{
+    if (!controls)
+        return;
+
+    controls->dirtags_count = 0;
+
+    memset(
+        controls->dirtags,
+        0,
+        sizeof(controls->dirtags)
+    );
+}
+
+/* ============================================================
+ * ADICIONAR TAGS UNICAS
+ * ============================================================ */
+
+static void dirtags_add_unique(
+    Controls *controls,
+    const char *tag)
+{
+    if (!controls ||
+        !tag ||
+        !tag[0])
+        return;
+
+
+    /*
+     * Verifica se a tag já existe.
+     */
+
+    for (int i = 0;
+         i < controls->dirtags_count;
+         i++) {
+
+        if (strcmp(
+                controls->dirtags[i],
+                tag
+            ) == 0) {
+
+            /*
+             * Já existe.
+             *
+             * Não adiciona novamente.
+             */
+
+            return;
+        }
+    }
+
+
+    /*
+     * Verifica limite.
+     */
+
+    if (controls->dirtags_count >= MAX_DIR_TAGS) {
+
+        fprintf(
+            stderr,
+            "[DIRTAGS] limite atingido\n"
+        );
+
+        return;
+    }
+
+
+    /*
+     * Adiciona nova tag.
+     */
+
+    snprintf(
+        controls->dirtags[
+            controls->dirtags_count
+        ],
+        MAX_TAG_LENGTH,
+        "%s",
+        tag
+    );
+
+
+    controls->dirtags_count++;
+
+
+    fprintf(
+        stderr,
+        "[DIRTAGS] adicionada: %s\n",
+        tag
+    );
 }
 
 
@@ -1537,16 +1865,6 @@ static gboolean on_key_pressed(
                     tag
                 );
 
-
-                /*
-                 * Mostra a tag no label.
-                 */
-
-                tag_file(
-                    controls,
-                    filename,
-                    tag
-                );
             }
 
 
@@ -1750,6 +2068,32 @@ static gboolean on_key_pressed(
                 stderr,
                 "[LEADER] fz\n"
             );
+
+            return TRUE;
+        }
+
+        /* ----------------------------------------------------
+         * R -> CRIAR DIRETÓRIOS DAS TAGS
+         *
+         * fr
+         * ---------------------------------------------------- */
+
+        if (keyval == GDK_KEY_r ||
+            keyval == GDK_KEY_R) {
+
+            fprintf(
+                stderr,
+                "[LEADER] fr\n"
+            );
+
+
+            dirtags_build(
+                controls
+            );
+
+
+            controls->leadfvar = 'r';
+
 
             return TRUE;
         }
@@ -2550,18 +2894,15 @@ void controls_setup(
      * Leader T.
      */
 
-    controls->leadt =
-        FALSE;
+    controls->leadt = FALSE;
 
-    controls->leadt_count =
-        0;
+    controls->leadt_count = 0;
 
+    controls->dirtags_count = 0;
 
-    controls->tags_directory[0] =
-        '\0';
+    controls->tags_directory[0] = '\0';
 
-    controls->tags_file[0] =
-        '\0';
+    controls->tags_file[0] = '\0';
 
 
     /*
