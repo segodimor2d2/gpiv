@@ -143,6 +143,10 @@ static void show_message(
     const char *message
 );
 
+static gboolean dirtags_prevalidate(
+    Controls *controls
+);
+
 /* ============================================================
  * RETORNA DIRETÓRIO DO ARQUIVO
  * ============================================================ */
@@ -542,6 +546,637 @@ static void dirtags_create_directories(
             message
         );
     }
+}
+
+/* ============================================================
+ * PRÉ-VALIDAÇÃO PARA fR
+ *
+ * NÃO move nenhum arquivo.
+ *
+ * Verifica antecipadamente:
+ *
+ *   - origem existe
+ *   - origem é arquivo regular
+ *   - tag existe
+ *   - diretório da tag existe
+ *   - diretório da tag é realmente diretório
+ *   - destino pode ser construído
+ *   - nomes _bis_N podem ser calculados
+ *   - caminhos não ultrapassam PATH_MAX
+ *
+ * Retorno:
+ *
+ *   TRUE  = tudo válido
+ *   FALSE = existe algum problema
+ * ============================================================ */
+
+static gboolean dirtags_prevalidate(
+    Controls *controls)
+{
+    if (!controls)
+        return FALSE;
+
+
+    /*
+     * --------------------------------------------------------
+     * PRECISAMOS TER TAGS
+     * --------------------------------------------------------
+     */
+
+    if (controls->leadt_count <= 0) {
+
+        show_message(
+            controls,
+            "Erro: nenhuma tag encontrada"
+        );
+
+        fprintf(
+            stderr,
+            "[fR] ERRO: nenhuma tag encontrada\n"
+        );
+
+        return FALSE;
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * VERIFICA CADA ARQUIVO
+     * --------------------------------------------------------
+     */
+
+    for (int i = 0;
+         i < controls->leadt_count;
+         i++) {
+
+        const char *path =
+            controls->leadtvar[i].path;
+
+        const char *tag =
+            controls->leadtvar[i].tag;
+
+
+        /*
+         * ----------------------------------------------------
+         * PATH
+         * ----------------------------------------------------
+         */
+
+        if (!path ||
+            !path[0]) {
+
+            fprintf(
+                stderr,
+                "[fR] ERRO: entrada %d possui path vazio\n",
+                i
+            );
+
+
+            show_message(
+                controls,
+                "Erro: arquivo possui path vazio"
+            );
+
+
+            return FALSE;
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * TAG
+         * ----------------------------------------------------
+         */
+
+        if (!tag ||
+            !tag[0]) {
+
+            fprintf(
+                stderr,
+                "[fR] ERRO: '%s' possui tag vazia\n",
+                path
+            );
+
+
+            show_message(
+                controls,
+                "Erro: arquivo possui tag vazia"
+            );
+
+
+            return FALSE;
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * VERIFICA ORIGEM
+         * ----------------------------------------------------
+         */
+
+        struct stat source_st;
+
+
+        if (stat(path, &source_st) != 0) {
+
+            fprintf(
+                stderr,
+                "[fR] ERRO: origem não existe: '%s': %s\n",
+                path,
+                strerror(errno)
+            );
+
+
+            char message[4096];
+
+
+            snprintf(
+                message,
+                sizeof(message),
+                "Erro: arquivo nao existe: %.*s",
+                (int)(sizeof(message) - 27),
+                path
+            );
+
+
+            show_message(
+                controls,
+                message
+            );
+
+
+            return FALSE;
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * NÃO PODE SER DIRETÓRIO
+         * ----------------------------------------------------
+         */
+
+        if (!S_ISREG(source_st.st_mode)) {
+
+            fprintf(
+                stderr,
+                "[fR] ERRO: origem não é arquivo regular: '%s'\n",
+                path
+            );
+
+
+            char message[4096];
+
+
+            snprintf(
+                message,
+                sizeof(message),
+                "Erro: origem nao e arquivo regular: %.*s",
+                (int)(sizeof(message) - 37),
+                path
+            );
+
+
+            show_message(
+                controls,
+                message
+            );
+
+
+            return FALSE;
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * MONTA DIRETÓRIO DA TAG
+         * ----------------------------------------------------
+         */
+
+        char directory[PATH_MAX];
+
+
+        int written =
+            snprintf(
+                directory,
+                sizeof(directory),
+                "%s/%s",
+                controls->tags_directory,
+                tag
+            );
+
+
+        if (written < 0 ||
+            (size_t)written >= sizeof(directory)) {
+
+            fprintf(
+                stderr,
+                "[fR] ERRO: caminho do diretório muito longo: %s\n",
+                tag
+            );
+
+
+            show_message(
+                controls,
+                "Erro: caminho do destino muito longo"
+            );
+
+
+            return FALSE;
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * VERIFICA DIRETÓRIO
+         * ----------------------------------------------------
+         */
+
+        struct stat directory_st;
+
+
+        if (stat(directory, &directory_st) != 0) {
+
+            fprintf(
+                stderr,
+                "[fR] ERRO: diretório da tag não existe: '%s': %s\n",
+                directory,
+                strerror(errno)
+            );
+
+
+            char message[4096];
+
+
+            snprintf(
+                message,
+                sizeof(message),
+                "Erro: pasta da tag nao existe: %s",
+                tag
+            );
+
+
+            show_message(
+                controls,
+                message
+            );
+
+
+            return FALSE;
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * GARANTE S_ISDIR
+         * ----------------------------------------------------
+         */
+
+        if (!S_ISDIR(directory_st.st_mode)) {
+
+            fprintf(
+                stderr,
+                "[fR] ERRO: '%s' existe mas não é diretório\n",
+                directory
+            );
+
+
+            char message[4096];
+
+
+            snprintf(
+                message,
+                sizeof(message),
+                "Erro: '%s' existe mas nao e diretorio",
+                tag
+            );
+
+
+            show_message(
+                controls,
+                message
+            );
+
+
+            return FALSE;
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * PEGA NOME DO ARQUIVO
+         * ----------------------------------------------------
+         */
+
+        const char *filename =
+            strrchr(path, '/');
+
+
+        if (filename) {
+
+            filename++;
+
+        } else {
+
+            filename = path;
+        }
+
+
+        if (!filename[0]) {
+
+            fprintf(
+                stderr,
+                "[fR] ERRO: nome de arquivo vazio: '%s'\n",
+                path
+            );
+
+
+            show_message(
+                controls,
+                "Erro: nome de arquivo invalido"
+            );
+
+
+            return FALSE;
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * MONTA DESTINO ORIGINAL
+         * ----------------------------------------------------
+         */
+
+        char destination[PATH_MAX];
+
+
+        written =
+            snprintf(
+                destination,
+                sizeof(destination),
+                "%s/%s",
+                directory,
+                filename
+            );
+
+
+        if (written < 0 ||
+            (size_t)written >= sizeof(destination)) {
+
+            fprintf(
+                stderr,
+                "[fR] ERRO: destino muito longo:\n"
+                "      %s/%s\n",
+                directory,
+                filename
+            );
+
+
+            show_message(
+                controls,
+                "Erro: caminho do destino muito longo"
+            );
+
+
+            return FALSE;
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * DESTINO JÁ EXISTE?
+         * ----------------------------------------------------
+         *
+         * Se existir, ainda não é erro.
+         *
+         * Vamos calcular:
+         *
+         * arquivo.mp4
+         * arquivo_bis_1.mp4
+         * arquivo_bis_2.mp4
+         * ...
+         */
+
+        struct stat destination_st;
+
+
+        if (stat(destination, &destination_st) == 0) {
+
+            fprintf(
+                stderr,
+                "[fR] destino já existe:\n"
+                "      %s\n",
+                destination
+            );
+
+
+            /*
+             * ------------------------------------------------
+             * SEPARA NOME E EXTENSÃO
+             * ------------------------------------------------
+             */
+
+            char base[PATH_MAX];
+
+
+            written =
+                snprintf(
+                    base,
+                    sizeof(base),
+                    "%s",
+                    filename
+                );
+
+
+            if (written < 0 ||
+                (size_t)written >= sizeof(base)) {
+
+                show_message(
+                    controls,
+                    "Erro: nome de arquivo muito longo"
+                );
+
+
+                return FALSE;
+            }
+
+
+            char *dot =
+                strrchr(
+                    base,
+                    '.'
+                );
+
+
+            char extension[PATH_MAX];
+
+            extension[0] = '\0';
+
+
+            if (dot &&
+                dot != base) {
+
+                snprintf(
+                    extension,
+                    sizeof(extension),
+                    "%s",
+                    dot
+                );
+
+
+                *dot = '\0';
+            }
+
+
+            /*
+             * ------------------------------------------------
+             * PROCURA _bis_N
+             * ------------------------------------------------
+             */
+
+            gboolean found_free_name =
+                FALSE;
+
+
+            for (int n = 1;
+                 n < INT_MAX;
+                 n++) {
+
+                char candidate[PATH_MAX];
+
+
+                written =
+                    snprintf(
+                        candidate,
+                        sizeof(candidate),
+                        "%s/%s_bis_%d%s",
+                        directory,
+                        base,
+                        n,
+                        extension
+                    );
+
+
+                if (written < 0 ||
+                    (size_t)written >= sizeof(candidate)) {
+
+                    fprintf(
+                        stderr,
+                        "[fR] ERRO: candidato muito longo\n"
+                    );
+
+
+                    show_message(
+                        controls,
+                        "Erro: nome alternativo muito longo"
+                    );
+
+
+                    return FALSE;
+                }
+
+
+                if (stat(candidate, &destination_st) != 0) {
+
+                    if (errno == ENOENT) {
+
+                        fprintf(
+                            stderr,
+                            "[fR] destino disponível:\n"
+                            "      %s\n",
+                            candidate
+                        );
+
+
+                        found_free_name =
+                            TRUE;
+
+
+                        break;
+                    }
+
+
+                    /*
+                     * Outro erro ao verificar o destino.
+                     */
+
+                    fprintf(
+                        stderr,
+                        "[fR] ERRO verificando '%s': %s\n",
+                        candidate,
+                        strerror(errno)
+                    );
+
+
+                    show_message(
+                        controls,
+                        "Erro verificando destino"
+                    );
+
+
+                    return FALSE;
+                }
+            }
+
+
+            if (!found_free_name) {
+
+                fprintf(
+                    stderr,
+                    "[fR] ERRO: não foi possível encontrar "
+                    "nome disponível para '%s'\n",
+                    filename
+                );
+
+
+                show_message(
+                    controls,
+                    "Erro: nao foi possivel criar nome _bis_N"
+                );
+
+
+                return FALSE;
+            }
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * ARQUIVO VALIDADO
+         * ----------------------------------------------------
+         */
+
+        fprintf(
+            stderr,
+            "[fR] OK:\n"
+            "      origem: %s\n"
+            "      tag:    %s\n"
+            "      pasta:  %s\n",
+            path,
+            tag,
+            directory
+        );
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * TUDO OK
+     * --------------------------------------------------------
+     */
+
+    fprintf(
+        stderr,
+        "[fR] PRÉ-VALIDAÇÃO OK\n"
+    );
+
+
+    show_message(
+        controls,
+        "fR: pre-validacao OK"
+    );
+
+
+    return TRUE;
 }
 
 /* ============================================================
@@ -2401,20 +3036,30 @@ static gboolean on_key_pressed(
              * ----------------------------------------------------
              */
 
-            if (all_valid) {
+            if (!all_valid) {
 
-                show_message(
-                    controls,
-                    "fR: todas as pastas de tags sao validas"
-                );
+                controls->leadf = FALSE;
+                controls->leadfvar = '\0';
 
-
-                fprintf(
-                    stderr,
-                    "[fR] todas as pastas são válidas\n"
-                );
+                return TRUE;
             }
 
+
+            /*
+             * Todas as pastas são válidas.
+             *
+             * Agora podemos executar a pré-validação
+             * dos arquivos e destinos.
+             */
+
+            fprintf(
+                stderr,
+                "[LEADER] fR\n"
+            );
+
+            dirtags_prevalidate(
+                controls
+            );
 
             /*
              * fR terminou.
