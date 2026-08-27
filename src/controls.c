@@ -320,86 +320,219 @@ static void dirtags_create_directories(
 
             fprintf(
                 stderr,
-                "[DIRTAGS] caminho muito longo: %s\n",
+                "[DIRTAGS] ERRO: caminho muito longo: %s\n",
                 controls->dirtags[i]
             );
 
-            continue;
-        }
-
-
-        gboolean created = FALSE;
-
-
-        if (mkdir(
-                directory,
-                0755
-            ) == 0) {
-
-            created = TRUE;
-
-            fprintf(
-                stderr,
-                "[DIRTAGS] diretório criado: %s\n",
-                directory
+            show_message(
+                controls,
+                "Erro: caminho da pasta muito longo"
             );
 
-        } else if (errno == EEXIST) {
-
-            fprintf(
-                stderr,
-                "[DIRTAGS] já existe: %s\n",
-                directory
-            );
-
-        } else {
-
-            fprintf(
-                stderr,
-                "[DIRTAGS] erro criando: %s: %s\n",
-                directory,
-                strerror(errno)
-            );
-
-            continue;
+            return;
         }
 
 
         /*
-         * Adiciona ao texto que será mostrado no label.
+         * 0 = erro
+         * 1 = criado
+         * 2 = já existia e é diretório
+         */
+
+        int directory_status = 0;
+
+
+        /*
+         * ----------------------------------------------------
+         * TENTA CRIAR
+         * ----------------------------------------------------
+         */
+
+        if (mkdir(directory, 0755) == 0) {
+
+            directory_status = 1;
+
+
+            fprintf(
+                stderr,
+                "[DIRTAGS] criado: %s\n",
+                directory
+            );
+        }
+
+        /*
+         * ----------------------------------------------------
+         * JÁ EXISTE
+         * ----------------------------------------------------
+         */
+
+        else if (errno == EEXIST) {
+
+            struct stat st;
+
+
+            if (stat(directory, &st) != 0) {
+
+                directory_status = 0;
+
+
+                fprintf(
+                    stderr,
+                    "[DIRTAGS] ERRO: não foi possível verificar '%s': %s\n",
+                    directory,
+                    strerror(errno)
+                );
+
+            } else if (!S_ISDIR(st.st_mode)) {
+
+                directory_status = 0;
+
+
+                fprintf(
+                    stderr,
+                    "[DIRTAGS] ERRO: '%s' existe mas não é um diretório\n",
+                    directory
+                );
+
+            } else {
+
+                directory_status = 2;
+
+
+                fprintf(
+                    stderr,
+                    "[DIRTAGS] já existe: %s\n",
+                    directory
+                );
+            }
+        }
+
+        /*
+         * ----------------------------------------------------
+         * OUTRO ERRO
+         * ----------------------------------------------------
+         */
+
+        else {
+
+            directory_status = 0;
+
+
+            fprintf(
+                stderr,
+                "[DIRTAGS] ERRO: mkdir('%s'): %s\n",
+                directory,
+                strerror(errno)
+            );
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * ERRO
+         * ----------------------------------------------------
+         */
+
+        if (directory_status == 0) {
+
+            struct stat st;
+
+
+            /*
+             * Descobre novamente se o problema foi porque
+             * existe um objeto que não é diretório.
+             */
+
+            if (stat(directory, &st) == 0 &&
+                !S_ISDIR(st.st_mode)) {
+
+                char error_message[4096];
+
+
+                snprintf(
+                    error_message,
+                    sizeof(error_message),
+                    "Erro: '%s' existe mas nao e diretorio",
+                    controls->dirtags[i]
+                );
+
+
+                show_message(
+                    controls,
+                    error_message
+                );
+
+            } else {
+
+                char error_message[4096];
+
+
+                snprintf(
+                    error_message,
+                    sizeof(error_message),
+                    "Erro ao criar pasta %s",
+                    controls->dirtags[i]
+                );
+
+
+                show_message(
+                    controls,
+                    error_message
+                );
+            }
+
+
+            /*
+             * MUITO IMPORTANTE:
+             *
+             * Não continua.
+             */
+
+            return;
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * RESULTADO
+         * ----------------------------------------------------
          */
 
         size_t used =
             strlen(message);
 
 
-        if (created) {
+        if (used >= sizeof(message) - 1)
+            break;
+
+
+        if (directory_status == 1) {
 
             snprintf(
                 message + used,
                 sizeof(message) - used,
-                "%s%s criado: %s",
+                "%sdiretorio criado: %s",
                 used ? "\n" : "",
-                controls->dirtags[i],
-                directory
+                controls->dirtags[i]
             );
 
-        } else {
+        } else if (directory_status == 2) {
 
             snprintf(
                 message + used,
                 sizeof(message) - used,
-                "%s%s já existe: %s",
+                "%sdiretorio ja existe: %s",
                 used ? "\n" : "",
-                controls->dirtags[i],
-                directory
+                controls->dirtags[i]
             );
         }
     }
 
 
     /*
-     * Mostra o resultado no final do label.
+     * --------------------------------------------------------
+     * MOSTRA RESULTADO
+     * --------------------------------------------------------
      */
 
     if (message[0]) {
@@ -2073,13 +2206,10 @@ static gboolean on_key_pressed(
         }
 
         /* ----------------------------------------------------
-         * R -> CRIAR DIRETÓRIOS DAS TAGS
-         *
-         * fr
+         * r -> CRIAR DIRETÓRIOS DAS TAGS
          * ---------------------------------------------------- */
 
-        if (keyval == GDK_KEY_r ||
-            keyval == GDK_KEY_R) {
+        if (keyval == GDK_KEY_r) {
 
             fprintf(
                 stderr,
@@ -2093,6 +2223,205 @@ static gboolean on_key_pressed(
 
 
             controls->leadfvar = 'r';
+
+
+            return TRUE;
+        }
+
+        /* ----------------------------------------------------
+         * R -> TESTAR DIRETÓRIOS DAS TAGS
+         * ---------------------------------------------------- */
+
+        if (keyval == GDK_KEY_R) {
+
+            fprintf(
+                stderr,
+                "[LEADER] fR\n"
+            );
+
+
+            /*
+             * Primeiro monta a lista de tags únicas.
+             */
+
+            dirtags_clear(
+                controls
+            );
+
+
+            for (int i = 0;
+                 i < controls->leadt_count;
+                 i++) {
+
+                const char *tag =
+                    controls->leadtvar[i].tag;
+
+
+                if (!tag ||
+                    !tag[0])
+                    continue;
+
+
+                dirtags_add_unique(
+                    controls,
+                    tag
+                );
+            }
+
+
+            /*
+             * Verifica todas as pastas.
+             */
+
+            gboolean all_valid = TRUE;
+
+
+            for (int i = 0;
+                 i < controls->dirtags_count;
+                 i++) {
+
+                char directory[PATH_MAX];
+
+
+                int written =
+                    snprintf(
+                        directory,
+                        sizeof(directory),
+                        "%s/%s",
+                        controls->tags_directory,
+                        controls->dirtags[i]
+                    );
+
+
+                if (written < 0 ||
+                    (size_t)written >= sizeof(directory)) {
+
+                    char message[4096];
+
+
+                    snprintf(
+                        message,
+                        sizeof(message),
+                        "Erro: caminho muito longo para %s",
+                        controls->dirtags[i]
+                    );
+
+
+                    show_message(
+                        controls,
+                        message
+                    );
+
+
+                    all_valid = FALSE;
+
+                    break;
+                }
+
+
+                struct stat st;
+
+
+                if (stat(directory, &st) != 0) {
+
+                    fprintf(
+                        stderr,
+                        "[fR] ERRO: não foi possível verificar '%s': %s\n",
+                        directory,
+                        strerror(errno)
+                    );
+
+
+                    char message[4096];
+
+
+                    snprintf(
+                        message,
+                        sizeof(message),
+                        "Erro: pasta nao existe: %s",
+                        controls->dirtags[i]
+                    );
+
+
+                    show_message(
+                        controls,
+                        message
+                    );
+
+
+                    all_valid = FALSE;
+
+                    break;
+                }
+
+
+                if (!S_ISDIR(st.st_mode)) {
+
+                    fprintf(
+                        stderr,
+                        "[fR] ERRO: '%s' existe mas não é um diretório\n",
+                        directory
+                    );
+
+
+                    char message[4096];
+
+
+                    snprintf(
+                        message,
+                        sizeof(message),
+                        "Erro: '%s' existe mas nao e diretorio",
+                        controls->dirtags[i]
+                    );
+
+
+                    show_message(
+                        controls,
+                        message
+                    );
+
+
+                    all_valid = FALSE;
+
+                    break;
+                }
+
+
+                fprintf(
+                    stderr,
+                    "[fR] OK: %s é diretório\n",
+                    directory
+                );
+            }
+
+
+            /*
+             * ----------------------------------------------------
+             * RESULTADO DO TESTE
+             * ----------------------------------------------------
+             */
+
+            if (all_valid) {
+
+                show_message(
+                    controls,
+                    "fR: todas as pastas de tags sao validas"
+                );
+
+
+                fprintf(
+                    stderr,
+                    "[fR] todas as pastas são válidas\n"
+                );
+            }
+
+
+            /*
+             * fR terminou.
+             */
+
+            controls->leadf = FALSE;
+            controls->leadfvar = '\0';
 
 
             return TRUE;
