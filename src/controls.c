@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <time.h>
 
 #include <sys/stat.h>
 #include <errno.h>
@@ -144,6 +145,18 @@ static void show_message(
 );
 
 static gboolean dirtags_prevalidate(
+    Controls *controls
+);
+
+static void tags_save(
+    Controls *controls
+);
+
+static gboolean tags_archive(
+    Controls *controls
+);
+
+static gboolean dirtags_move_files(
     Controls *controls
 );
 
@@ -1179,6 +1192,8 @@ static gboolean dirtags_prevalidate(
     return TRUE;
 }
 
+
+
 /* ============================================================
  * MONTA DIRTAGS COM LEADTVAR
  * ============================================================ */
@@ -1595,6 +1610,770 @@ static void tags_load(
 
 
 /* ============================================================
+ * MOVE ARQUIVOS PARA OS DIRETÓRIOS DAS TAGS
+ *
+ * A pré-validação deve ter sido executada antes.
+ *
+ * Exemplo:
+ *
+ *   /videos/a.mp4,ta
+ *
+ * vira:
+ *
+ *   /videos/ta/a.mp4
+ *
+ * Se o destino já existir:
+ *
+ *   a.mp4
+ *   a_bis_1.mp4
+ *   a_bis_2.mp4
+ *   ...
+ *
+ * Retorno:
+ *
+ *   TRUE  = todos os arquivos foram movidos
+ *   FALSE = ocorreu algum erro
+ * ============================================================ */
+
+static gboolean dirtags_move_files(
+    Controls *controls)
+{
+    if (!controls)
+        return FALSE;
+
+
+    if (controls->leadt_count <= 0) {
+
+        show_message(
+            controls,
+            "Erro: nenhuma tag encontrada"
+        );
+
+        return FALSE;
+    }
+
+
+    fprintf(
+        stderr,
+        "[fR] iniciando movimentação dos arquivos\n"
+    );
+
+
+    int moved_count = 0;
+
+
+    /*
+     * --------------------------------------------------------
+     * MOVE CADA ARQUIVO
+     * --------------------------------------------------------
+     */
+
+    for (int i = 0;
+         i < controls->leadt_count;
+         i++) {
+
+        const char *source =
+            controls->leadtvar[i].path;
+
+        const char *tag =
+            controls->leadtvar[i].tag;
+
+
+        if (!source ||
+            !source[0] ||
+            !tag ||
+            !tag[0]) {
+
+            fprintf(
+                stderr,
+                "[fR] ERRO: entrada inválida %d\n",
+                i
+            );
+
+            show_message(
+                controls,
+                "Erro: entrada de tag invalida"
+            );
+
+            return FALSE;
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * DIRETÓRIO DA TAG
+         * ----------------------------------------------------
+         */
+
+        char directory[PATH_MAX];
+
+
+        int written =
+            snprintf(
+                directory,
+                sizeof(directory),
+                "%s/%s",
+                controls->tags_directory,
+                tag
+            );
+
+
+        if (written < 0 ||
+            (size_t)written >= sizeof(directory)) {
+
+            fprintf(
+                stderr,
+                "[fR] ERRO: diretório muito longo: %s\n",
+                tag
+            );
+
+
+            show_message(
+                controls,
+                "Erro: caminho do destino muito longo"
+            );
+
+
+            return FALSE;
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * NOME DO ARQUIVO
+         * ----------------------------------------------------
+         */
+
+        const char *filename =
+            strrchr(
+                source,
+                '/'
+            );
+
+
+        if (filename)
+            filename++;
+        else
+            filename = source;
+
+
+        if (!filename[0]) {
+
+            fprintf(
+                stderr,
+                "[fR] ERRO: nome de arquivo vazio\n"
+            );
+
+
+            show_message(
+                controls,
+                "Erro: nome de arquivo invalido"
+            );
+
+
+            return FALSE;
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * DESTINO NORMAL
+         * ----------------------------------------------------
+         */
+
+        char destination[PATH_MAX];
+
+
+        written =
+            snprintf(
+                destination,
+                sizeof(destination),
+                "%s/%s",
+                directory,
+                filename
+            );
+
+
+        if (written < 0 ||
+            (size_t)written >= sizeof(destination)) {
+
+            fprintf(
+                stderr,
+                "[fR] ERRO: destino muito longo:\n"
+                "      %s/%s\n",
+                directory,
+                filename
+            );
+
+
+            show_message(
+                controls,
+                "Erro: caminho do destino muito longo"
+            );
+
+
+            return FALSE;
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * SE DESTINO EXISTIR, PROCURA _bis_N
+         * ----------------------------------------------------
+         */
+
+        struct stat st;
+
+
+        if (stat(destination, &st) == 0) {
+
+            char base[PATH_MAX];
+
+
+            written =
+                snprintf(
+                    base,
+                    sizeof(base),
+                    "%s",
+                    filename
+                );
+
+
+            if (written < 0 ||
+                (size_t)written >= sizeof(base)) {
+
+                show_message(
+                    controls,
+                    "Erro: nome de arquivo muito longo"
+                );
+
+                return FALSE;
+            }
+
+
+            /*
+             * Separa extensão.
+             *
+             * exemplo:
+             *
+             * video.mp4
+             *
+             * base      = video
+             * extension = .mp4
+             */
+
+            char extension[PATH_MAX];
+
+            extension[0] = '\0';
+
+
+            char *dot =
+                strrchr(
+                    base,
+                    '.'
+                );
+
+
+            if (dot &&
+                dot != base) {
+
+                snprintf(
+                    extension,
+                    sizeof(extension),
+                    "%s",
+                    dot
+                );
+
+                *dot = '\0';
+            }
+
+
+            /*
+             * Procura:
+             *
+             * video_bis_1.mp4
+             * video_bis_2.mp4
+             * ...
+             */
+
+            gboolean found =
+                FALSE;
+
+
+            for (int n = 1;
+                 n < INT_MAX;
+                 n++) {
+
+                written =
+                    snprintf(
+                        destination,
+                        sizeof(destination),
+                        "%s/%s_bis_%d%s",
+                        directory,
+                        base,
+                        n,
+                        extension
+                    );
+
+
+                if (written < 0 ||
+                    (size_t)written >= sizeof(destination)) {
+
+                    fprintf(
+                        stderr,
+                        "[fR] ERRO: nome alternativo muito longo\n"
+                    );
+
+
+                    show_message(
+                        controls,
+                        "Erro: nome alternativo muito longo"
+                    );
+
+
+                    return FALSE;
+                }
+
+
+                if (stat(destination, &st) != 0) {
+
+                    if (errno == ENOENT) {
+
+                        found =
+                            TRUE;
+
+                        break;
+                    }
+
+
+                    fprintf(
+                        stderr,
+                        "[fR] ERRO verificando destino '%s': %s\n",
+                        destination,
+                        strerror(errno)
+                    );
+
+
+                    show_message(
+                        controls,
+                        "Erro verificando destino"
+                    );
+
+
+                    return FALSE;
+                }
+            }
+
+
+            if (!found) {
+
+                fprintf(
+                    stderr,
+                    "[fR] ERRO: não encontrou nome disponível\n"
+                );
+
+
+                show_message(
+                    controls,
+                    "Erro: nao foi possivel encontrar nome livre"
+                );
+
+
+                return FALSE;
+            }
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * MOVE
+         * ----------------------------------------------------
+         */
+
+        fprintf(
+            stderr,
+            "[fR] movendo:\n"
+            "      origem:  %s\n"
+            "      destino: %s\n",
+            source,
+            destination
+        );
+
+
+        if (rename(
+                source,
+                destination
+            ) != 0) {
+
+            fprintf(
+                stderr,
+                "[fR] ERRO ao mover:\n"
+                "      %s\n"
+                "      -> %s\n"
+                "      %s\n",
+                source,
+                destination,
+                strerror(errno)
+            );
+
+
+            char message[4096];
+
+            snprintf(
+                message,
+                sizeof(message),
+                "Erro ao mover: %.*s",
+                (int)(sizeof(message) - 16),
+                filename
+            );
+
+            show_message(
+                controls,
+                message
+            );
+
+
+            return FALSE;
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * ATUALIZA PATH NA MEMÓRIA
+         * ----------------------------------------------------
+         *
+         * Isso é importante.
+         *
+         * O tags.csv ainda precisa representar o novo
+         * caminho do arquivo.
+         */
+
+        snprintf(
+            controls->leadtvar[i].path,
+            PATH_MAX,
+            "%s",
+            destination
+        );
+
+
+        moved_count++;
+
+
+        fprintf(
+            stderr,
+            "[fR] OK: %s\n",
+            destination
+        );
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * SALVA tags.csv COM OS NOVOS PATHS
+     * --------------------------------------------------------
+     */
+
+    tags_save(
+        controls
+    );
+
+
+    /*
+     * --------------------------------------------------------
+     * ARQUIVA tags.csv
+     * --------------------------------------------------------
+     *
+     * Só chegamos aqui se TODOS os arquivos foram
+     * movidos com sucesso.
+     */
+
+    if (!tags_archive(
+            controls
+        )) {
+
+        fprintf(
+            stderr,
+            "[fR] arquivos foram movidos, "
+            "mas não foi possível arquivar tags.csv\n"
+        );
+
+        return FALSE;
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * RESULTADO
+     * --------------------------------------------------------
+     */
+
+    char message[4096];
+
+
+    snprintf(
+        message,
+        sizeof(message),
+        "fR concluido: %d arquivo%s movido%s",
+        moved_count,
+        moved_count == 1 ? "" : "s",
+        moved_count == 1 ? "" : "s"
+    );
+
+
+    show_message(
+        controls,
+        message
+    );
+
+
+    fprintf(
+        stderr,
+        "[fR] movimentação concluída: %d arquivo(s)\n",
+        moved_count
+    );
+
+    return TRUE;
+
+}
+
+/* ============================================================
+ * RENOMEIA tags.csv PARA tagsYYYYMMDDHHMM.md
+ *
+ * Executada somente depois que o fR terminou com sucesso.
+ *
+ * Exemplo:
+ *
+ *   tags.csv
+ *
+ * vira:
+ *
+ *   tags202608271657.md
+ *
+ * ============================================================ */
+
+static gboolean tags_archive(
+    Controls *controls)
+{
+    if (!controls ||
+        !controls->tags_file[0])
+        return FALSE;
+
+
+    /*
+     * --------------------------------------------------------
+     * PEGA DATA/HORA ATUAL
+     * --------------------------------------------------------
+     */
+
+    time_t now =
+        time(NULL);
+
+
+    if (now == (time_t)-1) {
+
+        fprintf(
+            stderr,
+            "[TAGS] ERRO: time()\n"
+        );
+
+        show_message(
+            controls,
+            "Erro obtendo data e hora"
+        );
+
+        return FALSE;
+    }
+
+
+    struct tm local_time;
+
+
+    if (localtime_r(
+            &now,
+            &local_time
+        ) == NULL) {
+
+        fprintf(
+            stderr,
+            "[TAGS] ERRO: localtime_r()\n"
+        );
+
+        show_message(
+            controls,
+            "Erro obtendo data e hora"
+        );
+
+        return FALSE;
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * MONTA NOME
+     * --------------------------------------------------------
+     *
+     * tagsYYYYMMDDHHMM.md
+     */
+
+    char archive_name[64];
+
+
+    int written =
+        snprintf(
+            archive_name,
+            sizeof(archive_name),
+            "tags%04d%02d%02d%02d%02d.md",
+            local_time.tm_year + 1900,
+            local_time.tm_mon + 1,
+            local_time.tm_mday,
+            local_time.tm_hour,
+            local_time.tm_min
+        );
+
+
+    if (written < 0 ||
+        (size_t)written >= sizeof(archive_name)) {
+
+        fprintf(
+            stderr,
+            "[TAGS] ERRO: nome do arquivo muito longo\n"
+        );
+
+        show_message(
+            controls,
+            "Erro criando nome do arquivo tags"
+        );
+
+        return FALSE;
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * MONTA CAMINHO COMPLETO
+     * --------------------------------------------------------
+     */
+
+    char archive_path[PATH_MAX];
+
+
+    written =
+        snprintf(
+            archive_path,
+            sizeof(archive_path),
+            "%s/%s",
+            controls->tags_directory,
+            archive_name
+        );
+
+
+    if (written < 0 ||
+        (size_t)written >= sizeof(archive_path)) {
+
+        fprintf(
+            stderr,
+            "[TAGS] ERRO: caminho do arquivo muito longo\n"
+        );
+
+        show_message(
+            controls,
+            "Erro: caminho do arquivo tags muito longo"
+        );
+
+        return FALSE;
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * RENOMEIA
+     * --------------------------------------------------------
+     */
+
+    fprintf(
+        stderr,
+        "[TAGS] arquivando:\n"
+        "       %s\n"
+        "       -> %s\n",
+        controls->tags_file,
+        archive_path
+    );
+
+
+    if (rename(
+            controls->tags_file,
+            archive_path
+        ) != 0) {
+
+        fprintf(
+            stderr,
+            "[TAGS] ERRO ao renomear:\n"
+            "       %s\n"
+            "       -> %s\n"
+            "       %s\n",
+            controls->tags_file,
+            archive_path,
+            strerror(errno)
+        );
+
+
+        show_message(
+            controls,
+            "Erro ao arquivar tags.csv"
+        );
+
+
+        return FALSE;
+    }
+
+
+    fprintf(
+        stderr,
+        "[TAGS] arquivo arquivado: %s\n",
+        archive_path
+    );
+
+
+    /*
+     * --------------------------------------------------------
+     * LIMPA tags_file
+     * --------------------------------------------------------
+     *
+     * O tags.csv não existe mais.
+     */
+
+    controls->tags_file[0] =
+        '\0';
+
+
+    /*
+     * --------------------------------------------------------
+     * MENSAGEM
+     * --------------------------------------------------------
+
+     */
+
+    char message[4096];
+
+
+    snprintf(
+        message,
+        sizeof(message),
+        "fR concluido: %s",
+        archive_name
+    );
+
+
+    show_message(
+        controls,
+        message
+    );
+
+
+    return TRUE;
+}
+
+/* ============================================================
  * SALVA TAGS.CSV
  * ============================================================ */
 
@@ -1648,7 +2427,6 @@ static void tags_save(
         controls->leadt_count
     );
 }
-
 
 /* ============================================================
  * TROCA tags.csv CONFORME O ARQUIVO ATUAL
@@ -3057,9 +3835,46 @@ static gboolean on_key_pressed(
                 "[LEADER] fR\n"
             );
 
-            dirtags_prevalidate(
+
+            /*
+             * ------------------------------------------------
+             * PRÉ-VALIDAÇÃO
+             * ------------------------------------------------
+             *
+             * Nada é movido se existir qualquer problema.
+             */
+
+            gboolean valid =
+                dirtags_prevalidate(
+                    controls
+                );
+
+
+            if (!valid) {
+
+                controls->leadf = FALSE;
+                controls->leadfvar = '\0';
+
+                fprintf(
+                    stderr,
+                    "[fR] movimentação cancelada "
+                    "pela pré-validação\n"
+                );
+
+                return TRUE;
+            }
+
+
+            /*
+             * ------------------------------------------------
+             * MOVE OS ARQUIVOS
+             * ------------------------------------------------
+             */
+
+            dirtags_move_files(
                 controls
             );
+
 
             /*
              * fR terminou.
