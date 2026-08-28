@@ -628,11 +628,11 @@ int player_get_time(
 
     if (status < 0) {
 
-        fprintf(
-            stderr,
-            "[MPV] erro obtendo time-pos: %s\n",
-            mpv_error_string(status)
-        );
+        // fprintf(
+        //     stderr,
+        //     "[MPV] erro obtendo time-pos: %s\n",
+        //     mpv_error_string(status)
+        // );
 
         return -1;
     }
@@ -649,11 +649,11 @@ int player_get_time(
 
     if (status < 0) {
 
-        fprintf(
-            stderr,
-            "[MPV] erro obtendo duration: %s\n",
-            mpv_error_string(status)
-        );
+        // fprintf(
+        //     stderr,
+        //     "[MPV] erro obtendo duration: %s\n",
+        //     mpv_error_string(status)
+        // );
 
         return -1;
     }

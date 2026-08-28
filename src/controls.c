@@ -2927,6 +2927,199 @@ static void detect_video_format(
 }
 
 /* ============================================================
+ * CONVERTER VIDEO PARA FORMATO CONVENCIONAL
+ *
+ * Resultado:
+ *   Container: MP4
+ *   Video:    H.264
+ *   Pixel:    yuv420p
+ *   Audio:    AAC, quando houver audio
+ *
+ * O arquivo original NÃO é apagado.
+ * Exemplo:
+ *
+ *   video_original
+ *       ->
+ *   video_original.mp4
+ * ============================================================ */
+
+static void convert_video_format(
+    Controls *controls,
+    const char *filename
+)
+{
+    if (!controls || !filename || !filename[0])
+        return;
+
+    /*
+     * --------------------------------------------------------
+     * NOME DO ARQUIVO DE SAIDA
+     * --------------------------------------------------------
+     */
+
+    char output[PATH_MAX];
+
+    int written =
+        snprintf(
+            output,
+            sizeof(output),
+            "%s.mp4",
+            filename
+        );
+
+    if (written < 0 ||
+        (size_t)written >= sizeof(output)) {
+
+        show_message(
+            controls,
+            "Erro: caminho do arquivo de saida muito longo"
+        );
+
+        return;
+    }
+
+    /*
+     * --------------------------------------------------------
+     * COMANDO FFMPEG
+     *
+     * -y             permite substituir um .mp4 existente
+     * -i             arquivo de entrada
+     * -c:v libx264   video H.264
+     * -pix_fmt       yuv420p
+     * -c:a aac       audio AAC
+     * -movflags      MP4 otimizado
+     *
+     * -map 0:v:0     primeiro video
+     * -map 0:a:0?    primeiro audio, se existir
+     * --------------------------------------------------------
+     */
+
+    char command[PATH_MAX * 2 + 1024];
+
+    written =
+        snprintf(
+            command,
+            sizeof(command),
+
+            "ffmpeg -hide_banner -loglevel error "
+            "-y "
+            "-i \"%s\" "
+            "-map 0:v:0 "
+            "-map 0:a:0? "
+            "-c:v libx264 "
+            "-pix_fmt yuv420p "
+            "-c:a aac "
+            "-movflags +faststart "
+            "\"%s\"",
+
+            filename,
+            output
+        );
+
+    if (written < 0 ||
+        (size_t)written >= sizeof(command)) {
+
+        show_message(
+            controls,
+            "Erro: comando ffmpeg muito longo"
+        );
+
+        return;
+    }
+
+    /*
+     * --------------------------------------------------------
+     * EXECUTAR FFMPEG
+     * --------------------------------------------------------
+     */
+
+    fprintf(
+        stderr,
+        "[fW] convertendo:\n"
+        "     entrada: %s\n"
+        "     saida:   %s\n",
+        filename,
+        output
+    );
+
+    int status =
+        system(command);
+
+    /*
+     * --------------------------------------------------------
+     * VERIFICAR RESULTADO
+     * --------------------------------------------------------
+     */
+
+    if (status == -1) {
+
+        show_message(
+            controls,
+            "Erro: nao foi possivel executar ffmpeg"
+        );
+
+        return;
+    }
+
+    if (!WIFEXITED(status) ||
+        WEXITSTATUS(status) != 0) {
+
+        show_message(
+            controls,
+            "Erro: ffmpeg falhou ao converter o video"
+        );
+
+        fprintf(
+            stderr,
+            "[fW] ffmpeg falhou (status=%d)\n",
+            status
+        );
+
+        return;
+    }
+
+    /*
+     * --------------------------------------------------------
+     * SUCESSO
+     * --------------------------------------------------------
+     */
+
+    char message[4096];
+
+    written =
+        snprintf(
+            message,
+            sizeof(message),
+            "video convertido: %s",
+            output
+        );
+
+    if (written < 0 ||
+        (size_t)written >= sizeof(message)) {
+
+        show_message(
+            controls,
+            "Video convertido com sucesso"
+        );
+
+        return;
+    }
+
+    show_message(
+        controls,
+        message
+    );
+
+    fprintf(
+        stderr,
+        "[fW] conversao concluida: %s\n",
+        output
+    );
+}
+
+
+
+/* ============================================================
  * KEYBOARD
  * ============================================================ */
 
@@ -3721,6 +3914,11 @@ static gboolean on_key_pressed(
             }
 
             detect_video_format(
+                controls,
+                filename
+            );
+
+            convert_video_format(
                 controls,
                 filename
             );
