@@ -2,8 +2,122 @@
 #define CONTROLS_H
 
 #include <gtk/gtk.h>
+#include <limits.h>
 
 #include "app.h"
+
+
+/* ============================================================
+ * CONFIGURAÇÃO
+ * ============================================================ */
+
+#define MAX_TAGS 4096
+#define MAX_TAG_LENGTH 32
+#define MAX_DIR_TAGS MAX_TAGS
+
+
+/* ============================================================
+ * TAG
+ * ============================================================ */
+
+typedef struct {
+    char path[PATH_MAX];
+    char tag[MAX_TAG_LENGTH];
+} FileTag;
+
+
+/* ============================================================
+ * CONTEXTO DE CONTROLES
+ * ============================================================ */
+
+typedef struct Controls {
+
+    GtkWidget *window;
+
+    GtkWidget *gl_area;
+
+    GtkWidget *info_label;
+
+    PlayerApp *app;
+
+    guint info_timer_id;
+
+    char message[4096];
+
+
+    /*
+     * --------------------------------------------------------
+     * LEADER F
+     * --------------------------------------------------------
+     */
+
+    gboolean leadf;
+
+    char leadfvar;
+
+
+    /*
+     * --------------------------------------------------------
+     * LEADER T
+     * --------------------------------------------------------
+     *
+     * t -> ativa leader
+     *
+     * ta
+     * tb
+     * tc
+     * ...
+     */
+
+    gboolean leadt;
+
+
+    /*
+     * --------------------------------------------------------
+     * LISTA DE TAGS
+     * --------------------------------------------------------
+     */
+
+    FileTag leadtvar[MAX_TAGS];
+
+    int leadt_count;
+
+
+    /*
+     * --------------------------------------------------------
+     * DIRTAGS
+     * --------------------------------------------------------
+     *
+     * Lista de tags únicas usadas para criar
+     * os diretórios.
+     */
+
+    char dirtags[MAX_DIR_TAGS][MAX_TAG_LENGTH];
+
+    int dirtags_count;
+
+
+    /*
+     * --------------------------------------------------------
+     * DIRETÓRIO / ARQUIVO DE TAGS
+     * --------------------------------------------------------
+     */
+
+    char tags_directory[PATH_MAX];
+
+    char tags_file[PATH_MAX];
+
+} Controls;
+
+
+/* ============================================================
+ * MENSAGEM NO LABEL
+ * ============================================================ */
+
+void show_message(
+    Controls *controls,
+    const char *message
+);
 
 
 /* ============================================================
