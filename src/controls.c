@@ -2775,39 +2775,6 @@ static gboolean update_info_label(
         }
     }
 
-
-    /*
-     * --------------------------------------------------------
-     * LEADER T
-     * --------------------------------------------------------
-     *
-     * O leader T é apenas um estado temporário:
-     *
-     *     t -> ativa
-     *     t + letra -> salva tag e desativa
-     *
-     * Não usamos leadtvar[0] aqui.
-     *
-     * leadtvar[] contém a lista de arquivos tagueados,
-     * e a posição [0] não representa necessariamente
-     * o arquivo atual.
-     */
-
-    char tag_leader[64];
-
-    tag_leader[0] = '\0';
-
-
-    if (controls->leadt) {
-
-        snprintf(
-            tag_leader,
-            sizeof(tag_leader),
-            "t"
-        );
-    }
-
-
     /*
      * --------------------------------------------------------
      * TAG DO ARQUIVO
@@ -2850,53 +2817,21 @@ static gboolean update_info_label(
         );
     }
 
-
-    /*
-     * --------------------------------------------------------
-     * LEADER FINAL
-     * --------------------------------------------------------
-     */
-
-    char active_leader[128];
-
-    active_leader[0] = '\0';
-
-
-    if (leader[0] &&
-        tag_leader[0]) {
-
-        snprintf(
-            active_leader,
-            sizeof(active_leader),
-            "%s / %s",
-            leader,
-            tag_leader
-        );
-
-    } else if (leader[0]) {
-
-        snprintf(
-            active_leader,
-            sizeof(active_leader),
-            "%s",
-            leader
-        );
-
-    } else if (tag_leader[0]) {
-
-        snprintf(
-            active_leader,
-            sizeof(active_leader),
-            "%s",
-            tag_leader
-        );
-    }
-
-
     /*
      * --------------------------------------------------------
      * LABEL
      * --------------------------------------------------------
+     *
+     * Linha 1:
+     *   tempo
+     *
+     * Linha 2:
+     *   arquivo + tag permanente
+     *
+     * Linha 3:
+     *   mensagem temporária
+     *
+     * O leader T NÃO aparece.
      */
 
     char text[16384];
@@ -2904,77 +2839,35 @@ static gboolean update_info_label(
 
     if (controls->message[0]) {
 
-        if (active_leader[0]) {
-
-            snprintf(
-                text,
-                sizeof(text),
-                "%02d:%02d / %02d:%02d / %d%%\n"
-                "%s\n"
-                "%s\n"
-                "%s",
-                pos_min,
-                pos_seconds,
-                dur_min,
-                dur_seconds,
-                percent,
-                filename_with_tag,
-                controls->message,
-                active_leader
-            );
-
-        } else {
-
-            snprintf(
-                text,
-                sizeof(text),
-                "%02d:%02d / %02d:%02d / %d%%\n"
-                "%s\n"
-                "%s",
-                pos_min,
-                pos_seconds,
-                dur_min,
-                dur_seconds,
-                percent,
-                filename_with_tag,
-                controls->message
-            );
-        }
+        snprintf(
+            text,
+            sizeof(text),
+            "%02d:%02d / %02d:%02d / %d%%\n"
+            "%s\n"
+            "%s",
+            pos_min,
+            pos_seconds,
+            dur_min,
+            dur_seconds,
+            percent,
+            filename_with_tag,
+            controls->message
+        );
 
     } else {
 
-        if (active_leader[0]) {
-
-            snprintf(
-                text,
-                sizeof(text),
-                "%02d:%02d / %02d:%02d / %d%%\n"
-                "%s\n"
-                "%s",
-                pos_min,
-                pos_seconds,
-                dur_min,
-                dur_seconds,
-                percent,
-                filename_with_tag,
-                active_leader
-            );
-
-        } else {
-
-            snprintf(
-                text,
-                sizeof(text),
-                "%02d:%02d / %02d:%02d / %d%%\n"
-                "%s",
-                pos_min,
-                pos_seconds,
-                dur_min,
-                dur_seconds,
-                percent,
-                filename_with_tag
-            );
-        }
+        snprintf(
+            text,
+            sizeof(text),
+            "%02d:%02d / %02d:%02d / %d%%\n"
+            "%s",
+            pos_min,
+            pos_seconds,
+            dur_min,
+            dur_seconds,
+            percent,
+            filename_with_tag
+        );
     }
 
 
@@ -2982,7 +2875,6 @@ static gboolean update_info_label(
         GTK_LABEL(controls->info_label),
         text
     );
-
 
     return G_SOURCE_CONTINUE;
 }
@@ -3627,6 +3519,60 @@ static gboolean on_key_pressed(
 
     if (keyval == GDK_KEY_f) {
 
+        /*
+         * Se o leader F já está ativo,
+         * f é a segunda tecla:
+         *
+         * ff
+         */
+        if (controls->leadf) {
+
+            controls->leadfvar = 'f';
+
+            fprintf(
+                stderr,
+                "[LEADER] ff\n"
+            );
+
+            return TRUE;
+        }
+
+        /*
+         * Se o leader T está ativo,
+         * f é a segunda tecla:
+         *
+         * tf
+         */
+        if (controls->leadt) {
+
+            const char *filename =
+                player_get_filename(
+                    player
+                );
+
+            if (filename) {
+
+                tag_file(
+                    controls,
+                    filename,
+                    "tf"
+                );
+            }
+
+            controls->leadt = FALSE;
+
+            fprintf(
+                stderr,
+                "[LEADER] tf\n"
+            );
+
+            return TRUE;
+        }
+
+        /*
+         * Ativa leader F.
+         */
+
         controls->leadf = TRUE;
         controls->leadfvar = '\0';
 
@@ -3644,6 +3590,60 @@ static gboolean on_key_pressed(
      * ======================================================== */
 
     if (keyval == GDK_KEY_t) {
+
+        /*
+         * Se o leader F está ativo,
+         * t é a segunda tecla:
+         *
+         * ft
+         */
+        if (controls->leadf) {
+
+            controls->leadfvar = 't';
+
+            fprintf(
+                stderr,
+                "[LEADER] ft\n"
+            );
+
+            return TRUE;
+        }
+
+        /*
+         * Se o leader T já está ativo,
+         * t é a segunda tecla:
+         *
+         * tt
+         */
+        if (controls->leadt) {
+
+            const char *filename =
+                player_get_filename(
+                    player
+                );
+
+            if (filename) {
+
+                tag_file(
+                    controls,
+                    filename,
+                    "tt"
+                );
+            }
+
+            controls->leadt = FALSE;
+
+            fprintf(
+                stderr,
+                "[LEADER] tt\n"
+            );
+
+            return TRUE;
+        }
+
+        /*
+         * Ativa leader T.
+         */
 
         controls->leadt = TRUE;
 
