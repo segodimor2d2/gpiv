@@ -91,16 +91,6 @@ int tags_load(
         !directory)
         return -1;
 
-
-    tags_clear(
-        tags
-    );
-
-
-    /*
-     * Guarda o diretório atual.
-     */
-
     if (strlen(directory) >=
         sizeof(tags->directory)) {
 
@@ -111,6 +101,14 @@ int tags_load(
 
         return -1;
     }
+
+    /*
+     * Agora podemos limpar as tags antigas.
+     */
+
+    tags_clear(
+        tags
+    );
 
 
     strcpy(
@@ -269,8 +267,13 @@ int tags_load(
             line;
 
 
-        char tag =
-            comma[1];
+        char tag = comma[1];
+
+        if (comma[2] != '\0')
+            continue;
+
+        if (tag < 'a' || tag > 'z')
+            continue;
 
 
         /*
