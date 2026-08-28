@@ -13,8 +13,9 @@ SRC = \
 	src/ui.c \
 	src/controls.c \
 	src/filelist.c \
-	src/tags.c \
-	src/dirtags.c
+	src/dirtags.c \
+	src/control_tags.c \
+	src/control_video.c
 
 BIN = gpiv
 
