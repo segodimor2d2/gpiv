@@ -18,7 +18,7 @@
 #include <unistd.h>
 
 
-#define SEEK_SECONDS 3
+#define SEEK_SECONDS 1
 #define SEEK_HARD_SECONDS 10
 
 /* ============================================================
@@ -1046,10 +1046,10 @@ gboolean control_keys_handle(
 
 
     /* --------------------------------------------------------
-     * . -> FRAME ANTERIOR
+     * , -> FRAME ANTERIOR
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_period) {
+    if (keyval == GDK_KEY_comma) {
 
         if (player) {
 
@@ -1063,11 +1063,10 @@ gboolean control_keys_handle(
 
 
     /* --------------------------------------------------------
-     * n -> PRÓXIMO FRAME
+     * m -> PRÓXIMO FRAME
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_n ||
-        keyval == GDK_KEY_N) {
+    if (keyval == GDK_KEY_m) {
 
         if (player) {
 
@@ -1081,10 +1080,10 @@ gboolean control_keys_handle(
 
 
     /* --------------------------------------------------------
-     * M -> SEEK +10
+     * N -> SEEK +10
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_M) {
+    if (keyval == GDK_KEY_N) {
 
         if (player) {
 
@@ -1099,10 +1098,10 @@ gboolean control_keys_handle(
 
 
     /* --------------------------------------------------------
-     * < -> SEEK -10
+     * > -> SEEK -10
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_less) {
+    if (keyval == GDK_KEY_greater) {
 
         if (player) {
 
@@ -1117,10 +1116,10 @@ gboolean control_keys_handle(
 
 
     /* --------------------------------------------------------
-     * m -> SEEK +3
+     * n -> SEEK +1
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_m) {
+    if (keyval == GDK_KEY_n) {
 
         if (player) {
 
@@ -1135,10 +1134,10 @@ gboolean control_keys_handle(
 
 
     /* --------------------------------------------------------
-     * , -> SEEK -3
+     * . -> SEEK -1
      * -------------------------------------------------------- */
 
-    if (keyval == GDK_KEY_comma) {
+    if (keyval == GDK_KEY_period) {
 
         if (player) {
 
